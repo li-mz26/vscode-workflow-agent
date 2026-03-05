@@ -1,0 +1,168 @@
+{
+  "name": "vscode-workflow-agent",
+  "displayName": "Workflow Agent",
+  "description": "Visual workflow orchestration system for VSCode with MCP support",
+  "version": "0.1.0",
+  "publisher": "li-mz26",
+  "engines": {
+    "vscode": "^1.80.0"
+  },
+  "categories": [
+    "Machine Learning",
+    "Debuggers",
+    "Visualization"
+  ],
+  "keywords": [
+    "workflow",
+    "automation",
+    "llm",
+    "ai",
+    "mcp",
+    "visualization"
+  ],
+  "activationEvents": [
+    "onLanguage:json",
+    "onCommand:workflowAgent.open",
+    "workspaceContains:**/*.workflow.json"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "workflowAgent.open",
+        "title": "Open Workflow Editor",
+        "icon": "$(git-branch)"
+      },
+      {
+        "command": "workflowAgent.create",
+        "title": "Create New Workflow",
+        "icon": "$(add)"
+      },
+      {
+        "command": "workflowAgent.run",
+        "title": "Run Workflow",
+        "icon": "$(play)"
+      },
+      {
+        "command": "workflowAgent.debug",
+        "title": "Debug Workflow",
+        "icon": "$(debug-alt)"
+      },
+      {
+        "command": "workflowAgent.stop",
+        "title": "Stop Execution",
+        "icon": "$(debug-stop)"
+      }
+    ],
+    "menus": {
+      "commandPalette": [
+        {
+          "command": "workflowAgent.open",
+          "when": "resourceExtname == .workflow.json"
+        }
+      ],
+      "explorer/context": [
+        {
+          "command": "workflowAgent.open",
+          "when": "resourceExtname == .workflow.json",
+          "group": "navigation"
+        }
+      ],
+      "editor/title": [
+        {
+          "command": "workflowAgent.run",
+          "when": "resourceExtname == .workflow.json",
+          "group": "navigation"
+        },
+        {
+          "command": "workflowAgent.debug",
+          "when": "resourceExtname == .workflow.json",
+          "group": "navigation"
+        }
+      ]
+    },
+    "customEditors": [
+      {
+        "viewType": "workflowAgent.editor",
+        "displayName": "Workflow Editor",
+        "selector": [
+          {
+            "filenamePattern": "*.workflow.json"
+          }
+        ],
+        "priority": "default"
+      }
+    ],
+    "views": {
+      "explorer": [
+        {
+          "id": "workflowAgent.explorer",
+          "name": "Workflows",
+          "when": "workspaceHasWorkflowFiles"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "Workflow Agent",
+      "properties": {
+        "workflowAgent.pythonPath": {
+          "type": "string",
+          "default": "python3",
+          "description": "Path to Python executable for code execution"
+        },
+        "workflowAgent.defaultLLMProvider": {
+          "type": "string",
+          "default": "openai",
+          "enum": ["openai", "anthropic", "local"],
+          "description": "Default LLM provider"
+        },
+        "workflowAgent.openaiApiKey": {
+          "type": "string",
+          "default": "",
+          "description": "OpenAI API Key"
+        },
+        "workflowAgent.anthropicApiKey": {
+          "type": "string",
+          "default": "",
+          "description": "Anthropic API Key"
+        },
+        "workflowAgent.enableMCP": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable MCP server"
+        },
+        "workflowAgent.mcpPort": {
+          "type": "number",
+          "default": 3000,
+          "description": "MCP server port"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "pretest": "npm run compile && npm run lint",
+    "lint": "eslint src --ext ts",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "package": "vsce package",
+    "publish": "vsce publish"
+  },
+  "devDependencies": {
+    "@types/node": "20.x",
+    "@types/vscode": "^1.80.0",
+    "@typescript-eslint/eslint-plugin": "^6.0.0",
+    "@typescript-eslint/parser": "^6.0.0",
+    "@vscode/test-electron": "^2.3.0",
+    "@vscode/vsce": "^2.19.0",
+    "eslint": "^8.45.0",
+    "typescript": "^5.1.0",
+    "vitest": "^0.34.0"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^0.4.0",
+    "zod": "^3.22.0"
+  }
+}
