@@ -306,11 +306,24 @@ export class NodeExecutorFactory {
     ]);
 
     static create(type: string): NodeExecutor {
-        const ExecutorClass = this.executors.get(type);
-        if (!ExecutorClass) {
-            throw new Error(`No executor found for node type: ${type}`);
+        // 动态导入新节点执行器
+        switch (type) {
+            case 'http':
+                const { HTTPNodeExecutor } = require('./HTTPNodeExecutor');
+                return new HTTPNodeExecutor();
+            case 'webhook':
+                const { WebhookNodeExecutor } = require('./WebhookNodeExecutor');
+                return new WebhookNodeExecutor();
+            case 'schedule':
+                const { ScheduleNodeExecutor } = require('./ScheduleNodeExecutor');
+                return new ScheduleNodeExecutor();
+            default:
+                const ExecutorClass = this.executors.get(type);
+                if (!ExecutorClass) {
+                    throw new Error(`No executor found for node type: ${type}`);
+                }
+                return new ExecutorClass();
         }
-        return new ExecutorClass();
     }
 
     static register(type: string, executorClass: new () => NodeExecutor): void {

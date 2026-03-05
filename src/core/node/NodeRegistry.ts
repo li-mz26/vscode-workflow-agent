@@ -269,6 +269,179 @@ export class NodeRegistry {
             },
             executor: 'MergeNodeExecutor'
         });
+
+        // HTTP Request 节点
+        this.register({
+            type: 'http',
+            category: 'integration',
+            name: 'HTTP Request',
+            description: 'Make HTTP requests to external APIs',
+            icon: 'globe',
+            color: '#607D8B',
+            inputs: [
+                { id: 'input', name: 'input', type: 'data', dataType: 'any', required: false }
+            ],
+            outputs: [
+                { id: 'status', name: 'status', type: 'data', dataType: 'number', required: true },
+                { id: 'body', name: 'body', type: 'data', dataType: 'string', required: true },
+                { id: 'json', name: 'json', type: 'data', dataType: 'object', required: false }
+            ],
+            configSchema: {
+                type: 'object',
+                properties: {
+                    method: {
+                        type: 'string',
+                        enum: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
+                        default: 'GET',
+                        description: 'HTTP method'
+                    },
+                    url: {
+                        type: 'string',
+                        description: 'Request URL (supports {{variable}} syntax)'
+                    },
+                    headers: {
+                        type: 'object',
+                        description: 'Request headers',
+                        default: {}
+                    },
+                    body: {
+                        type: 'string',
+                        description: 'Request body'
+                    },
+                    timeout: {
+                        type: 'number',
+                        default: 30000,
+                        description: 'Timeout in milliseconds'
+                    },
+                    retryCount: {
+                        type: 'number',
+                        default: 0,
+                        description: 'Number of retries on failure'
+                    }
+                },
+                required: ['url']
+            },
+            defaultData: {
+                method: 'GET',
+                url: '',
+                headers: {},
+                timeout: 30000,
+                retryCount: 0
+            },
+            executor: 'HTTPNodeExecutor'
+        });
+
+        // Webhook 节点
+        this.register({
+            type: 'webhook',
+            category: 'integration',
+            name: 'Webhook',
+            description: 'Send notifications to Slack, DingTalk, Discord, PagerDuty',
+            icon: 'bell',
+            color: '#E91E63',
+            inputs: [
+                { id: 'input', name: 'input', type: 'data', dataType: 'any', required: false }
+            ],
+            outputs: [
+                { id: 'sent', name: 'sent', type: 'data', dataType: 'boolean', required: true }
+            ],
+            configSchema: {
+                type: 'object',
+                properties: {
+                    provider: {
+                        type: 'string',
+                        enum: ['slack', 'dingtalk', 'discord', 'pagerduty', 'generic'],
+                        default: 'slack',
+                        description: 'Webhook provider'
+                    },
+                    webhookUrl: {
+                        type: 'string',
+                        description: 'Webhook URL'
+                    },
+                    title: {
+                        type: 'string',
+                        description: 'Message title'
+                    },
+                    message: {
+                        type: 'string',
+                        description: 'Message content'
+                    },
+                    severity: {
+                        type: 'string',
+                        enum: ['info', 'warning', 'error', 'critical'],
+                        default: 'info'
+                    },
+                    fields: {
+                        type: 'array',
+                        description: 'Additional fields',
+                        items: {
+                            type: 'object',
+                            properties: {
+                                name: { type: 'string' },
+                                value: { type: 'string' },
+                                short: { type: 'boolean' }
+                            }
+                        }
+                    },
+                    mentions: {
+                        type: 'array',
+                        items: { type: 'string' },
+                        description: 'User IDs to mention'
+                    }
+                },
+                required: ['webhookUrl', 'message']
+            },
+            defaultData: {
+                provider: 'slack',
+                severity: 'info',
+                fields: [],
+                mentions: []
+            },
+            executor: 'WebhookNodeExecutor'
+        });
+
+        // Schedule 节点
+        this.register({
+            type: 'schedule',
+            category: 'flow',
+            name: 'Schedule',
+            description: 'Schedule workflow execution with cron expression',
+            icon: 'clock',
+            color: '#FF5722',
+            inputs: [],
+            outputs: [
+                { id: 'trigger', name: 'trigger', type: 'data', dataType: 'object', required: true }
+            ],
+            configSchema: {
+                type: 'object',
+                properties: {
+                    cronExpression: {
+                        type: 'string',
+                        description: 'Cron expression (e.g., "0 */5 * * *")'
+                    },
+                    timezone: {
+                        type: 'string',
+                        default: 'UTC',
+                        description: 'Timezone'
+                    },
+                    enabled: {
+                        type: 'boolean',
+                        default: true
+                    },
+                    maxRuns: {
+                        type: 'number',
+                        description: 'Maximum number of runs'
+                    }
+                },
+                required: ['cronExpression']
+            },
+            defaultData: {
+                cronExpression: '0 */5 * * *',
+                timezone: 'UTC',
+                enabled: true
+            },
+            executor: 'ScheduleNodeExecutor'
+        });
     }
 
     register(definition: NodeTypeDefinition): void {
