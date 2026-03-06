@@ -126,6 +126,7 @@ export interface CreateWorkflowDTO {
     edges?: Edge[];
     variables?: Variable[];
     settings?: Partial<WorkflowSettings>;
+    folderPath?: string;
 }
 
 // 执行状态

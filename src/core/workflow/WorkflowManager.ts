@@ -9,7 +9,7 @@ import {
     NodeConfig,
     Edge,
     ValidationResult 
-} from '../shared/types';
+} from '../../shared/types';
 import { EventEmitter } from 'events';
 import { NodeRegistry } from '../node/NodeRegistry';
 
@@ -103,14 +103,24 @@ export class WorkflowManager extends EventEmitter {
             updatedAt: now
         };
 
-        // 确定文件路径
-        const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
-        if (!workspaceFolder) {
-            throw new Error('No workspace folder open');
+        // 确定文件路径 - 优先使用提供的文件夹路径
+        let targetFolder: string | undefined;
+        
+        if (config.folderPath) {
+            targetFolder = config.folderPath;
+        } else {
+            const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+            if (workspaceFolder) {
+                targetFolder = workspaceFolder.uri.fsPath;
+            }
+        }
+
+        if (!targetFolder) {
+            throw new Error('No folder selected. Please open a workflow folder first.');
         }
 
         const fileName = `${config.name.toLowerCase().replace(/\s+/g, '-')}.workflow.json`;
-        workflow.filePath = path.join(workspaceFolder.uri.fsPath, fileName);
+        workflow.filePath = path.join(targetFolder, fileName);
 
         // 保存到文件
         await this.saveToFile(workflow);

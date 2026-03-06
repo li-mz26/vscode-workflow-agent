@@ -30,31 +30,73 @@
     "commands": [
       {
         "command": "workflowAgent.open",
-        "title": "Open Workflow Editor",
+        "title": "打开工作流",
         "icon": "$(git-branch)"
       },
       {
         "command": "workflowAgent.create",
-        "title": "Create New Workflow",
+        "title": "新建工作流",
         "icon": "$(add)"
       },
       {
+        "command": "workflowAgent.openFolder",
+        "title": "打开工作流文件夹",
+        "icon": "$(folder-opened)"
+      },
+      {
+        "command": "workflowAgent.closeFolder",
+        "title": "关闭工作流文件夹",
+        "icon": "$(close)"
+      },
+      {
+        "command": "workflowAgent.refresh",
+        "title": "刷新",
+        "icon": "$(refresh)"
+      },
+      {
         "command": "workflowAgent.run",
-        "title": "Run Workflow",
+        "title": "运行工作流",
         "icon": "$(play)"
       },
       {
         "command": "workflowAgent.debug",
-        "title": "Debug Workflow",
+        "title": "调试工作流",
         "icon": "$(debug-alt)"
       },
       {
         "command": "workflowAgent.stop",
-        "title": "Stop Execution",
+        "title": "停止执行",
         "icon": "$(debug-stop)"
       }
     ],
     "menus": {
+      "view/title": [
+        {
+          "command": "workflowAgent.openFolder",
+          "when": "view == workflowAgent.folders",
+          "group": "navigation"
+        },
+        {
+          "command": "workflowAgent.create",
+          "when": "view == workflowAgent.explorer",
+          "group": "navigation"
+        },
+        {
+          "command": "workflowAgent.refresh",
+          "when": "view == workflowAgent.explorer",
+          "group": "navigation"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "workflowAgent.closeFolder",
+          "when": "view == workflowAgent.folders && viewItem == workflowFolder"
+        },
+        {
+          "command": "workflowAgent.open",
+          "when": "view == workflowAgent.explorer && viewItem == workflow"
+        }
+      ],
       "commandPalette": [
         {
           "command": "workflowAgent.open",
@@ -93,12 +135,26 @@
         "priority": "default"
       }
     ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "workflowAgent",
+          "title": "Workflow Agent",
+          "icon": "$(git-branch)"
+        }
+      ]
+    },
     "views": {
-      "explorer": [
+      "workflowAgent": [
         {
           "id": "workflowAgent.explorer",
-          "name": "Workflows",
-          "when": "workspaceHasWorkflowFiles"
+          "name": "工作流列表",
+          "when": "workspaceHasWorkflowFiles || workflowAgent:hasFolders"
+        },
+        {
+          "id": "workflowAgent.folders",
+          "name": "工作流文件夹",
+          "when": "workflowAgent:hasFolders"
         }
       ]
     },
