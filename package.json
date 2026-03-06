@@ -67,10 +67,30 @@
         "command": "workflowAgent.stop",
         "title": "停止执行",
         "icon": "$(debug-stop)"
+      },
+      {
+        "command": "workflowAgent.toggleMCP",
+        "title": "启用/禁用 MCP 服务",
+        "icon": "$(server)"
+      },
+      {
+        "command": "workflowAgent.configureMCPPort",
+        "title": "配置 MCP 端口",
+        "icon": "$(ports-open-browser)"
+      },
+      {
+        "command": "workflowAgent.openSettings",
+        "title": "打开设置",
+        "icon": "$(gear)"
       }
     ],
     "menus": {
       "view/title": [
+        {
+          "command": "workflowAgent.openSettings",
+          "when": "view == workflowAgent.settings",
+          "group": "navigation"
+        },
         {
           "command": "workflowAgent.openFolder",
           "when": "view == workflowAgent.folders",
@@ -146,6 +166,11 @@
     },
     "views": {
       "workflowAgent": [
+        {
+          "id": "workflowAgent.settings",
+          "name": "设置",
+          "when": "true"
+        },
         {
           "id": "workflowAgent.explorer",
           "name": "工作流列表",

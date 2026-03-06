@@ -3,6 +3,7 @@ import { WorkflowEditorProvider } from './core/editor/WorkflowEditorProvider';
 import { WorkflowManager } from './core/workflow/WorkflowManager';
 import { WorkflowTreeProvider } from './core/tree/WorkflowTreeProvider';
 import { WorkflowFolderProvider } from './core/tree/WorkflowFolderProvider';
+import { SettingsProvider } from './core/settings/SettingsProvider';
 import { MCPServerManager } from './core/mcp/MCPServerManager';
 
 let mcpServerManager: MCPServerManager | undefined;
@@ -22,6 +23,12 @@ export function activate(context: vscode.ExtensionContext) {
     // 注册自定义编辑器
     context.subscriptions.push(
         WorkflowEditorProvider.register(context, workflowManager)
+    );
+
+    // 注册设置视图
+    const settingsProvider = new SettingsProvider();
+    context.subscriptions.push(
+        vscode.window.registerTreeDataProvider('workflowAgent.settings', settingsProvider)
     );
 
     // 注册工作流树视图
@@ -130,6 +137,26 @@ export function activate(context: vscode.ExtensionContext) {
         // 停止执行
         vscode.commands.registerCommand('workflowAgent.stop', async () => {
             vscode.window.showInformationMessage('停止执行...');
+        }),
+
+        // 启用/禁用 MCP
+        vscode.commands.registerCommand('workflowAgent.toggleMCP', async () => {
+            await settingsProvider.toggleMCP();
+        }),
+
+        // 配置 MCP 端口
+        vscode.commands.registerCommand('workflowAgent.configureMCPPort', async () => {
+            await settingsProvider.configureMCPPort();
+        }),
+
+        // 打开完整设置
+        vscode.commands.registerCommand('workflowAgent.openSettings', async () => {
+            await vscode.commands.executeCommand('workbench.action.openSettings', 'workflowAgent');
+        }),
+
+        // 编辑设置项
+        vscode.commands.registerCommand('workflowAgent.editSetting', async (setting: any) => {
+            await settingsProvider.editSetting(setting);
         })
     );
 
@@ -138,7 +165,7 @@ export function activate(context: vscode.ExtensionContext) {
         vscode.workspace.onDidChangeConfiguration(e => {
             if (e.affectsConfiguration('workflowAgent.enableMCP') || 
                 e.affectsConfiguration('workflowAgent.mcpPort')) {
-                vscode.window.showInformationMessage('Workflow Agent: 请重新加载窗口以应用 MCP 设置');
+                settingsProvider.refresh();
             }
         })
     );
