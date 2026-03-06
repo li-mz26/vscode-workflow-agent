@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { Canvas } from './components/Canvas';
 import { NodePalette } from './components/NodePalette';
 import { PropertiesPanel } from './components/PropertiesPanel';
@@ -9,13 +9,31 @@ import { NodeRegistry } from '../../src/core/node/NodeRegistry';
 const vscode = acquireVsCodeApi();
 const nodeRegistry = new NodeRegistry();
 
+// 执行状态类型
+interface NodeExecutionState {
+    nodeId: string;
+    status: 'idle' | 'running' | 'success' | 'error';
+    startTime?: number;
+    endTime?: number;
+}
+
+interface WorkflowExecutionState {
+    workflowId: string;
+    status: 'idle' | 'running' | 'completed' | 'failed';
+    currentNodeId?: string;
+    nodeStates: NodeExecutionState[];
+}
+
 function App() {
     const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
-    const { workflow, setWorkflow, addNode, markClean } = useCanvasStore();
+    const [executionState, setExecutionState] = useState<WorkflowExecutionState | null>(null);
+    const [isDeleteZoneActive, setIsDeleteZoneActive] = useState(false);
+    const [draggedNodeId, setDraggedNodeId] = useState<string | null>(null);
+    const { workflow, setWorkflow, addNode, deleteNode, markClean } = useCanvasStore();
+    const deleteZoneRef = useRef<HTMLDivElement>(null);
     
     // Load workflow from VSCode
     useEffect(() => {
-        // 从 window.__WORKFLOW_DATA__ 加载初始数据
         const initialWorkflow = (window as any).__WORKFLOW_DATA__;
         if (initialWorkflow) {
             setWorkflow(initialWorkflow);
@@ -30,15 +48,13 @@ function App() {
                 case 'workflow:update':
                     setWorkflow(message.payload);
                     break;
-                case 'execution:status':
-                    // Update execution status
+                case 'execution:state':
+                    setExecutionState(message.payload);
                     break;
             }
         };
         
         window.addEventListener('message', handleMessage);
-        
-        // Request initial workflow data
         vscode.postMessage({ type: 'webview:ready' });
         
         return () => window.removeEventListener('message', handleMessage);
@@ -46,31 +62,82 @@ function App() {
     
     // Handle node drag from palette
     const handleNodeDragStart = useCallback((type: string) => {
-        // Store the node type being dragged
         (window as any).__draggedNodeType = type;
+        (window as any).__isNewNode = true;
     }, []);
+
+    // Handle existing node drag start
+    const handleNodeDragStartFromCanvas = useCallback((nodeId: string) => {
+        setDraggedNodeId(nodeId);
+        (window as any).__isNewNode = false;
+    }, []);
+    
+    // Handle drag over delete zone
+    const handleDeleteZoneDragOver = useCallback((e: React.DragEvent) => {
+        e.preventDefault();
+        if (draggedNodeId) {
+            setIsDeleteZoneActive(true);
+        }
+    }, [draggedNodeId]);
+
+    // Handle drag leave delete zone
+    const handleDeleteZoneDragLeave = useCallback((e: React.DragEvent) => {
+        e.preventDefault();
+        setIsDeleteZoneActive(false);
+    }, []);
+
+    // Handle drop on delete zone
+    const handleDeleteZoneDrop = useCallback((e: React.DragEvent) => {
+        e.preventDefault();
+        if (draggedNodeId && workflow) {
+            const node = workflow.nodes.find(n => n.id === draggedNodeId);
+            if (node) {
+                deleteNode(draggedNodeId);
+                vscode.postMessage({
+                    type: 'node:delete',
+                    payload: { 
+                        workflow,
+                        nodeId: draggedNodeId,
+                        nodeType: node.type
+                    }
+                });
+            }
+        }
+        setIsDeleteZoneActive(false);
+        setDraggedNodeId(null);
+        delete (window as any).__isNewNode;
+    }, [draggedNodeId, workflow, deleteNode]);
     
     // Handle drop on canvas
     const handleCanvasDrop = useCallback((e: React.DragEvent) => {
         e.preventDefault();
         const type = (window as any).__draggedNodeType;
+        const isNewNode = (window as any).__isNewNode;
+        
+        // 如果是从画布拖拽的节点，不做处理（已由 delete zone 处理）
+        if (!isNewNode) {
+            setDraggedNodeId(null);
+            delete (window as any).__isNewNode;
+            return;
+        }
+        
         if (!type) return;
         
         const rect = e.currentTarget.getBoundingClientRect();
-        const x = (e.clientX - rect.left - 100); // Center the node
+        const x = (e.clientX - rect.left - 100);
         const y = (e.clientY - rect.top - 40);
         
         const node = nodeRegistry.createNode(type, { x, y });
         addNode(node);
         
-        // Notify VSCode
         vscode.postMessage({
             type: 'node:add',
-            payload: { node }
+            payload: { workflow, node }
         });
         
         delete (window as any).__draggedNodeType;
-    }, [addNode]);
+        delete (window as any).__isNewNode;
+    }, [addNode, workflow]);
     
     // Handle save
     const handleSave = useCallback(() => {
@@ -85,13 +152,23 @@ function App() {
     
     // Handle run
     const handleRun = useCallback(() => {
-        vscode.postMessage({ type: 'workflow:run' });
-    }, []);
+        if (workflow) {
+            vscode.postMessage({ 
+                type: 'workflow:run',
+                payload: workflow 
+            });
+        }
+    }, [workflow]);
     
     // Handle debug
     const handleDebug = useCallback(() => {
-        vscode.postMessage({ type: 'workflow:debug' });
-    }, []);
+        if (workflow) {
+            vscode.postMessage({ 
+                type: 'workflow:debug',
+                payload: workflow 
+            });
+        }
+    }, [workflow]);
     
     return (
         <div style={{
@@ -106,6 +183,7 @@ function App() {
                 onSave={handleSave}
                 onRun={handleRun}
                 onDebug={handleDebug}
+                isRunning={executionState?.status === 'running'}
                 canSave={useCanvasStore(state => state.isDirty)}
             />
             
@@ -127,13 +205,109 @@ function App() {
                     onDragOver={(e) => e.preventDefault()}
                     onDrop={handleCanvasDrop}
                 >
-                    <Canvas onNodeSelect={setSelectedNodeId} />
+                    <Canvas 
+                        onNodeSelect={setSelectedNodeId}
+                        onNodeDragStart={handleNodeDragStartFromCanvas}
+                        executionState={executionState}
+                    />
+                    
+                    {/* 删除区域 */}
+                    <div
+                        ref={deleteZoneRef}
+                        style={{
+                            position: 'absolute',
+                            bottom: '20px',
+                            left: '50%',
+                            transform: 'translateX(-50%)',
+                            width: '120px',
+                            height: '60px',
+                            background: isDeleteZoneActive 
+                                ? 'var(--vscode-inputValidation-errorBackground)' 
+                                : 'var(--vscode-editorWidget-background)',
+                            border: `2px dashed ${isDeleteZoneActive 
+                                ? 'var(--vscode-inputValidation-errorBorder)' 
+                                : 'var(--vscode-editorWidget-border)'}`,
+                            borderRadius: '8px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            transition: 'all 0.2s ease',
+                            opacity: draggedNodeId ? 1 : 0.3,
+                            pointerEvents: draggedNodeId ? 'auto' : 'none',
+                            zIndex: 1000
+                        }}
+                        onDragOver={handleDeleteZoneDragOver}
+                        onDragLeave={handleDeleteZoneDragLeave}
+                        onDrop={handleDeleteZoneDrop}
+                    >
+                        <span style={{
+                            fontSize: '24px',
+                            color: isDeleteZoneActive 
+                                ? 'var(--vscode-inputValidation-errorForeground)' 
+                                : 'var(--vscode-foreground)'
+                        }}>
+                            🗑️
+                        </span>
+                        <span style={{
+                            marginLeft: '8px',
+                            fontSize: '12px',
+                            color: isDeleteZoneActive 
+                                ? 'var(--vscode-inputValidation-errorForeground)' 
+                                : 'var(--vscode-foreground)'
+                        }}>
+                            删除节点
+                        </span>
+                    </div>
                 </div>
                 
                 <div style={{ width: '280px', flexShrink: 0 }}>
-                    <PropertiesPanel selectedNodeId={selectedNodeId} />
+                    <PropertiesPanel 
+                        selectedNodeId={selectedNodeId}
+                        onOpenConfig={(nodeId) => {
+                            const node = workflow?.nodes.find(n => n.id === nodeId);
+                            if (node) {
+                                vscode.postMessage({
+                                    type: 'node:openConfig',
+                                    payload: { node }
+                                });
+                            }
+                        }}
+                    />
                 </div>
             </div>
+            
+            {/* 执行状态栏 */}
+            {executionState && executionState.status !== 'idle' && (
+                <div style={{
+                    height: '30px',
+                    background: executionState.status === 'running' 
+                        ? 'var(--vscode-statusBar-debuggingBackground)'
+                        : executionState.status === 'completed'
+                            ? 'var(--vscode-statusBarItem-successBackground)'
+                            : 'var(--vscode-statusBarItem-errorBackground)',
+                    color: 'var(--vscode-statusBar-foreground)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    padding: '0 16px',
+                    fontSize: '12px'
+                }}>
+                    <span style={{ marginRight: '8px' }}>
+                        {executionState.status === 'running' && '▶️'}
+                        {executionState.status === 'completed' && '✅'}
+                        {executionState.status === 'failed' && '❌'}
+                    </span>
+                    <span>
+                        {executionState.status === 'running' && '执行中...'}
+                        {executionState.status === 'completed' && '执行完成'}
+                        {executionState.status === 'failed' && '执行失败'}
+                    </span>
+                    {executionState.currentNodeId && (
+                        <span style={{ marginLeft: 'auto' }}>
+                            当前节点: {executionState.currentNodeId}
+                        </span>
+                    )}
+                </div>
+            )}
         </div>
     );
 }

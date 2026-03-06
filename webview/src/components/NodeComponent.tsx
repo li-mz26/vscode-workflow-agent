@@ -1,10 +1,12 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useState, useRef } from 'react';
 import { NodeData, Position } from '../stores/canvasStore';
 
 interface NodeComponentProps {
     node: NodeData;
     selected: boolean;
+    executionStatus?: 'idle' | 'running' | 'success' | 'error';
     onDrag: (nodeId: string, delta: Position) => void;
+    onDragStart?: (nodeId: string) => void;
     onClick: (nodeId: string, multi: boolean) => void;
     onPortMouseDown: (nodeId: string, portId: string, isOutput: boolean) => void;
     onPortMouseUp: (nodeId: string, portId: string, isInput: boolean) => void;
@@ -18,13 +20,16 @@ const PORT_SPACING = 24;
 export const NodeComponent: React.FC<NodeComponentProps> = ({
     node,
     selected,
+    executionStatus = 'idle',
     onDrag,
+    onDragStart,
     onClick,
     onPortMouseDown,
     onPortMouseUp
 }) => {
     const [isDragging, setIsDragging] = useState(false);
     const [dragStart, setDragStart] = useState<Position>({ x: 0, y: 0 });
+    const dragStarted = useRef(false);
     
     const color = node.metadata?.color || '#666';
     const title = node.metadata?.name || node.type;
@@ -34,10 +39,35 @@ export const NodeComponent: React.FC<NodeComponentProps> = ({
         NODE_HEADER_HEIGHT + 20 + 
         Math.max(node.inputs.length, node.outputs.length) * PORT_SPACING + 20
     );
+
+    // 根据执行状态获取边框颜色
+    const getExecutionBorderColor = () => {
+        switch (executionStatus) {
+            case 'running':
+                return '#FFA500'; // 橙色
+            case 'success':
+                return '#4CAF50'; // 绿色
+            case 'error':
+                return '#F44336'; // 红色
+            default:
+                return null;
+        }
+    };
+
+    // 根据执行状态获取背景效果
+    const getExecutionBackground = () => {
+        switch (executionStatus) {
+            case 'running':
+                return 'url(#glow-running)';
+            default:
+                return undefined;
+        }
+    };
     
     const handleMouseDown = useCallback((e: React.MouseEvent) => {
         if (e.button === 0) {
             setIsDragging(true);
+            dragStarted.current = false;
             setDragStart({ x: e.clientX, y: e.clientY });
             onClick(node.id, e.metaKey || e.ctrlKey);
             e.stopPropagation();
@@ -50,14 +80,24 @@ export const NodeComponent: React.FC<NodeComponentProps> = ({
                 x: e.clientX - dragStart.x,
                 y: e.clientY - dragStart.y
             };
+            
+            // 首次移动时触发 dragStart
+            if (!dragStarted.current && (Math.abs(delta.x) > 3 || Math.abs(delta.y) > 3)) {
+                dragStarted.current = true;
+                onDragStart?.(node.id);
+            }
+            
             onDrag(node.id, delta);
             setDragStart({ x: e.clientX, y: e.clientY });
         }
-    }, [isDragging, dragStart, node.id, onDrag]);
+    }, [isDragging, dragStart, node.id, onDrag, onDragStart]);
     
     const handleMouseUp = useCallback(() => {
         setIsDragging(false);
+        dragStarted.current = false;
     }, []);
+
+    const executionBorderColor = getExecutionBorderColor();
     
     return (
         <g
@@ -84,8 +124,9 @@ export const NodeComponent: React.FC<NodeComponentProps> = ({
                 height={nodeHeight}
                 rx={8}
                 fill="var(--vscode-panel-background)"
-                stroke={selected ? 'var(--vscode-focusBorder)' : 'var(--vscode-panel-border)'}
-                strokeWidth={selected ? 2 : 1}
+                stroke={executionBorderColor || (selected ? 'var(--vscode-focusBorder)' : 'var(--vscode-panel-border)')}
+                strokeWidth={executionStatus !== 'idle' ? 3 : (selected ? 2 : 1)}
+                filter={getExecutionBackground()}
             />
             
             {/* Header */}
@@ -101,6 +142,33 @@ export const NodeComponent: React.FC<NodeComponentProps> = ({
                 height={8}
                 fill={color}
             />
+            
+            {/* Execution status indicator */}
+            {executionStatus !== 'idle' && (
+                <g transform={`translate(${NODE_WIDTH - 24}, 8)`}>
+                    <circle
+                        r={8}
+                        fill={
+                            executionStatus === 'running' ? '#FFA500' :
+                            executionStatus === 'success' ? '#4CAF50' :
+                            '#F44336'
+                        }
+                        stroke="white"
+                        strokeWidth={2}
+                    />
+                    <text
+                        y={4}
+                        fill="white"
+                        fontSize={10}
+                        textAnchor="middle"
+                        style={{ userSelect: 'none' }}
+                    >
+                        {executionStatus === 'running' && '▶'}
+                        {executionStatus === 'success' && '✓'}
+                        {executionStatus === 'error' && '✗'}
+                    </text>
+                </g>
+            )}
             
             {/* Title */}
             <text
@@ -185,7 +253,7 @@ export const NodeComponent: React.FC<NodeComponentProps> = ({
                 );
             })}
             
-            {/* Description (if exists) */}
+            {/* Description */}
             {node.metadata?.description && (
                 <text
                     x={12}
@@ -197,6 +265,25 @@ export const NodeComponent: React.FC<NodeComponentProps> = ({
                     {node.metadata.description.slice(0, 30)}
                     {node.metadata.description.length > 30 ? '...' : ''}
                 </text>
+            )}
+
+            {/* 执行中动画指示器 */}
+            {executionStatus === 'running' && (
+                <rect
+                    x={0}
+                    y={nodeHeight - 4}
+                    width={NODE_WIDTH}
+                    height={4}
+                    rx={2}
+                    fill="#FFA500"
+                >
+                    <animate
+                        attributeName="opacity"
+                        values="0.3;1;0.3"
+                        dur="1s"
+                        repeatCount="indefinite"
+                    />
+                </rect>
             )}
         </g>
     );

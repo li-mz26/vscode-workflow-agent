@@ -4,11 +4,34 @@ import { NodeComponent } from './NodeComponent';
 import { EdgeComponent } from './EdgeComponent';
 import { calculateEdgePath } from '../utils/edgeRouting';
 
-interface CanvasProps {
-    onNodeSelect?: (nodeId: string | null) => void;
+// 执行状态类型
+interface NodeExecutionState {
+    nodeId: string;
+    status: 'idle' | 'running' | 'success' | 'error';
+    startTime?: number;
+    endTime?: number;
+    hasOutput?: boolean;
+    hasError?: boolean;
 }
 
-export const Canvas: React.FC<CanvasProps> = ({ onNodeSelect }) => {
+interface WorkflowExecutionState {
+    workflowId: string;
+    status: 'idle' | 'running' | 'completed' | 'failed';
+    currentNodeId?: string;
+    nodeStates: NodeExecutionState[];
+}
+
+interface CanvasProps {
+    onNodeSelect?: (nodeId: string | null) => void;
+    onNodeDragStart?: (nodeId: string) => void;
+    executionState?: WorkflowExecutionState | null;
+}
+
+export const Canvas: React.FC<CanvasProps> = ({ 
+    onNodeSelect, 
+    onNodeDragStart,
+    executionState 
+}) => {
     const svgRef = useRef<SVGSVGElement>(null);
     const [isPanning, setIsPanning] = useState(false);
     const [panStart, setPanStart] = useState<Position>({ x: 0, y: 0 });
@@ -19,8 +42,6 @@ export const Canvas: React.FC<CanvasProps> = ({ onNodeSelect }) => {
         selectedNodes,
         connectingFrom,
         mousePosition,
-        setViewport,
-        setZoom,
         pan,
         selectNode,
         deselectAll,
@@ -43,8 +64,28 @@ export const Canvas: React.FC<CanvasProps> = ({ onNodeSelect }) => {
     const handleWheel = useCallback((e: React.WheelEvent) => {
         e.preventDefault();
         const delta = e.deltaY > 0 ? 0.9 : 1.1;
-        setZoom(viewport.zoom * delta);
-    }, [viewport.zoom, setZoom]);
+        const newZoom = Math.max(0.1, Math.min(3, viewport.zoom * delta));
+        
+        const rect = svgRef.current?.getBoundingClientRect();
+        if (rect) {
+            const mouseX = e.clientX - rect.left;
+            const mouseY = e.clientY - rect.top;
+            
+            const worldX = (mouseX - viewport.pan.x) / viewport.zoom;
+            const worldY = (mouseY - viewport.pan.y) / viewport.zoom;
+            
+            const newPanX = mouseX - worldX * newZoom;
+            const newPanY = mouseY - worldY * newZoom;
+            
+            useCanvasStore.setState({
+                viewport: {
+                    ...viewport,
+                    zoom: newZoom,
+                    pan: { x: newPanX, y: newPanY }
+                }
+            });
+        }
+    }, [viewport]);
     
     // Handle mouse down for panning or selection
     const handleMouseDown = useCallback((e: React.MouseEvent) => {
@@ -120,6 +161,11 @@ export const Canvas: React.FC<CanvasProps> = ({ onNodeSelect }) => {
         selectNode(nodeId, multi);
         onNodeSelect?.(nodeId);
     }, [selectNode, onNodeSelect]);
+
+    // Handle node drag start (for delete zone)
+    const handleNodeDragStart = useCallback((nodeId: string) => {
+        onNodeDragStart?.(nodeId);
+    }, [onNodeDragStart]);
     
     // Global mouse up handler
     useEffect(() => {
@@ -194,6 +240,15 @@ export const Canvas: React.FC<CanvasProps> = ({ onNodeSelect }) => {
                         fill="var(--vscode-foreground)"
                     />
                 </marker>
+
+                {/* 执行状态滤镜 */}
+                <filter id="glow-running">
+                    <feGaussianBlur stdDeviation="3" result="coloredBlur"/>
+                    <feMerge>
+                        <feMergeNode in="coloredBlur"/>
+                        <feMergeNode in="SourceGraphic"/>
+                    </feMerge>
+                </filter>
             </defs>
             
             {/* Background grid */}
@@ -207,8 +262,8 @@ export const Canvas: React.FC<CanvasProps> = ({ onNodeSelect }) => {
             
             {/* Transform group for pan/zoom */}
             <g transform={`translate(${viewport.pan.x}, ${viewport.pan.y}) scale(${viewport.zoom})`}>
-                {/* Edges */}
-                {workflow.edges.map(edge => {
+                {/* Edges with data flow animation */}
+                {workflow.edges.map((edge, index) => {
                     const sourceNode = workflow.nodes.find(n => n.id === edge.source.nodeId);
                     const targetNode = workflow.nodes.find(n => n.id === edge.target.nodeId);
                     
@@ -221,13 +276,20 @@ export const Canvas: React.FC<CanvasProps> = ({ onNodeSelect }) => {
                         edge.target.portId
                     );
                     
+                    // 检查是否有数据流动
+                    const isFlowing = executionState?.nodeStates.find(
+                        s => s.nodeId === edge.source.nodeId && s.status === 'success'
+                    );
+                    
                     return (
-                        <EdgeComponent
-                            key={edge.id}
-                            edge={edge}
-                            path={path}
-                            selected={false}
-                        />
+                        <g key={edge.id}>
+                            <EdgeComponent
+                                edge={edge}
+                                path={path}
+                                selected={false}
+                                isFlowing={!!isFlowing}
+                            />
+                        </g>
                     );
                 })}
                 
@@ -239,7 +301,7 @@ export const Canvas: React.FC<CanvasProps> = ({ onNodeSelect }) => {
                     const outputPort = sourceNode.outputs.find(p => p.id === connectingFrom.portId);
                     if (!outputPort) return null;
                     
-                    const startX = sourceNode.position.x + 200; // Node width
+                    const startX = sourceNode.position.x + 200;
                     const startY = sourceNode.position.y + 40 + sourceNode.outputs.indexOf(outputPort) * 20;
                     
                     return (
@@ -257,17 +319,23 @@ export const Canvas: React.FC<CanvasProps> = ({ onNodeSelect }) => {
                 })()}
                 
                 {/* Nodes */}
-                {workflow.nodes.map(node => (
-                    <NodeComponent
-                        key={node.id}
-                        node={node}
-                        selected={selectedNodes.includes(node.id)}
-                        onDrag={handleNodeDrag}
-                        onClick={handleNodeClick}
-                        onPortMouseDown={handlePortMouseDown}
-                        onPortMouseUp={handlePortMouseUp}
-                    />
-                ))}
+                {workflow.nodes.map(node => {
+                    const nodeState = executionState?.nodeStates.find(s => s.nodeId === node.id);
+                    
+                    return (
+                        <NodeComponent
+                            key={node.id}
+                            node={node}
+                            selected={selectedNodes.includes(node.id)}
+                            executionStatus={nodeState?.status || 'idle'}
+                            onDrag={handleNodeDrag}
+                            onDragStart={handleNodeDragStart}
+                            onClick={handleNodeClick}
+                            onPortMouseDown={handlePortMouseDown}
+                            onPortMouseUp={handlePortMouseUp}
+                        />
+                    );
+                })}
             </g>
         </svg>
     );

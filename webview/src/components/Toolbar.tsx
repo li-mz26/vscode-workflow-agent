@@ -5,13 +5,15 @@ interface ToolbarProps {
     onRun: () => void;
     onDebug: () => void;
     canSave: boolean;
+    isRunning?: boolean;
 }
 
 export const Toolbar: React.FC<ToolbarProps> = ({
     onSave,
     onRun,
     onDebug,
-    canSave
+    canSave,
+    isRunning = false
 }) => {
     return (
         <div style={{
@@ -42,32 +44,37 @@ export const Toolbar: React.FC<ToolbarProps> = ({
                 }}
             >
                 <span>💾</span>
-                Save
+                保存
             </button>
             
             <div style={{ width: '1px', height: '20px', background: 'var(--vscode-panel-border)' }} />
             
             <button
                 onClick={onRun}
+                disabled={isRunning}
                 style={{
                     display: 'flex',
                     alignItems: 'center',
                     gap: '4px',
                     padding: '6px 12px',
-                    background: 'var(--vscode-button-background)',
+                    background: isRunning
+                        ? 'var(--vscode-statusBar-debuggingBackground)'
+                        : 'var(--vscode-button-background)',
                     color: 'var(--vscode-button-foreground)',
                     border: 'none',
                     borderRadius: '4px',
-                    cursor: 'pointer',
-                    fontSize: '13px'
+                    cursor: isRunning ? 'not-allowed' : 'pointer',
+                    fontSize: '13px',
+                    opacity: isRunning ? 0.7 : 1
                 }}
             >
-                <span>▶</span>
-                Run
+                <span>{isRunning ? '⏳' : '▶'}</span>
+                {isRunning ? '运行中...' : '运行'}
             </button>
             
             <button
                 onClick={onDebug}
+                disabled={isRunning}
                 style={{
                     display: 'flex',
                     alignItems: 'center',
@@ -77,15 +84,39 @@ export const Toolbar: React.FC<ToolbarProps> = ({
                     color: 'var(--vscode-button-secondaryForeground)',
                     border: 'none',
                     borderRadius: '4px',
-                    cursor: 'pointer',
-                    fontSize: '13px'
+                    cursor: isRunning ? 'not-allowed' : 'pointer',
+                    fontSize: '13px',
+                    opacity: isRunning ? 0.7 : 1
                 }}
             >
                 <span>🐛</span>
-                Debug
+                调试
             </button>
             
             <div style={{ flex: 1 }} />
+            
+            {isRunning && (
+                <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    padding: '4px 10px',
+                    background: 'var(--vscode-statusBar-debuggingBackground)',
+                    borderRadius: '4px',
+                    fontSize: '12px',
+                    color: 'var(--vscode-statusBar-foreground)'
+                }}
+                >
+                    <span style={{
+                        width: '8px',
+                        height: '8px',
+                        background: '#FFA500',
+                        borderRadius: '50%',
+                        animation: 'pulse 1s infinite'
+                    }} />
+                    执行中...
+                </div>
+            )}
             
             <span style={{
                 fontSize: '12px',
@@ -93,6 +124,13 @@ export const Toolbar: React.FC<ToolbarProps> = ({
             }}>
                 Workflow Agent
             </span>
+            
+            <style>{`
+                @keyframes pulse {
+                    0%, 100% { opacity: 1; }
+                    50% { opacity: 0.5; }
+                }
+            `}</style>
         </div>
     );
 };
