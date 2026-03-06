@@ -113,6 +113,9 @@ export interface JSONSchema {
     enum?: any[];
     description?: string;
     default?: any;
+    minimum?: number;
+    maximum?: number;
+    items?: JSONSchema;
 }
 
 // 创建工作流 DTO

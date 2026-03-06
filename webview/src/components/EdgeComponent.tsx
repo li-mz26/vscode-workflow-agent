@@ -14,7 +14,7 @@ export const EdgeComponent: React.FC<EdgeComponentProps> = ({
 }) => {
     return (
         <g>
-            <!-- Invisible wider path for easier selection -->
+            {/* Invisible wider path for easier selection */}
             <path
                 d={path}
                 stroke="transparent"
@@ -23,7 +23,7 @@ export const EdgeComponent: React.FC<EdgeComponentProps> = ({
                 style={{ cursor: 'pointer' }}
             />
             
-            <!-- Visible path -->
+            {/* Visible path */}
             <path
                 d={path}
                 stroke={selected ? 'var(--vscode-focusBorder)' : 'var(--vscode-foreground)'}

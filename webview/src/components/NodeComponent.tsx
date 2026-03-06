@@ -68,7 +68,7 @@ export const NodeComponent: React.FC<NodeComponentProps> = ({
             onMouseUp={handleMouseUp}
             onMouseLeave={handleMouseUp}
         >
-            <!-- Shadow -->
+            {/* Shadow */}
             <rect
                 x={2}
                 y={4}
@@ -78,7 +78,7 @@ export const NodeComponent: React.FC<NodeComponentProps> = ({
                 fill="rgba(0,0,0,0.2)"
             />
             
-            <!-- Node body -->
+            {/* Node body */}
             <rect
                 width={NODE_WIDTH}
                 height={nodeHeight}
@@ -88,7 +88,7 @@ export const NodeComponent: React.FC<NodeComponentProps> = ({
                 strokeWidth={selected ? 2 : 1}
             />
             
-            <!-- Header -->
+            {/* Header */}
             <rect
                 width={NODE_WIDTH}
                 height={NODE_HEADER_HEIGHT}
@@ -102,7 +102,7 @@ export const NodeComponent: React.FC<NodeComponentProps> = ({
                 fill={color}
             />
             
-            <!-- Title -->
+            {/* Title */}
             <text
                 x={12}
                 y={22}
@@ -114,7 +114,7 @@ export const NodeComponent: React.FC<NodeComponentProps> = ({
                 {title}
             </text>
             
-            <!-- Input ports -->
+            {/* Input ports */}
             {node.inputs.map((port, index) => {
                 const y = NODE_HEADER_HEIGHT + 20 + index * PORT_SPACING;
                 return (
@@ -149,7 +149,7 @@ export const NodeComponent: React.FC<NodeComponentProps> = ({
                 );
             })}
             
-            <!-- Output ports -->
+            {/* Output ports */}
             {node.outputs.map((port, index) => {
                 const y = NODE_HEADER_HEIGHT + 20 + index * PORT_SPACING;
                 return (
@@ -185,7 +185,7 @@ export const NodeComponent: React.FC<NodeComponentProps> = ({
                 );
             })}
             
-            <!-- Description (if exists) -->
+            {/* Description (if exists) */}
             {node.metadata?.description && (
                 <text
                     x={12}

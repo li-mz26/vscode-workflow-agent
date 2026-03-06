@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { immer } from 'zustand/middleware/immer';
+import type { StateCreator } from 'zustand';
 
 export interface Position {
     x: number;

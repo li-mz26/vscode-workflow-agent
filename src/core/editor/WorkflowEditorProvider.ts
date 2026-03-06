@@ -138,7 +138,13 @@ export class WorkflowEditorProvider implements vscode.CustomTextEditorProvider {
     }
 
     private getHtmlForWebview(webview: vscode.Webview, workflow: Workflow): string {
-        // 简化的 HTML，实际应该加载构建后的 React/Vue 应用
+        // 加载构建后的 React 应用
+        const scriptUri = webview.asWebviewUri(
+            vscode.Uri.file(path.join(this.context.extensionPath, 'out', 'webview', 'assets', 'index.js'))
+        );
+        const cssUri = webview.asWebviewUri(
+            vscode.Uri.file(path.join(this.context.extensionPath, 'out', 'webview', 'assets', 'index.css'))
+        );
         const nonce = this.getNonce();
 
         return `<!DOCTYPE html>
@@ -146,241 +152,15 @@ export class WorkflowEditorProvider implements vscode.CustomTextEditorProvider {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'nonce-${nonce}';">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource} 'unsafe-inline'; script-src 'nonce-${nonce}'; connect-src ${webview.cspSource};">
     <title>Workflow Editor</title>
-    <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { 
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: var(--vscode-editor-background);
-            color: var(--vscode-editor-foreground);
-            overflow: hidden;
-        }
-        #root {
-            width: 100vw;
-            height: 100vh;
-            display: flex;
-            flex-direction: column;
-        }
-        .toolbar {
-            height: 40px;
-            display: flex;
-            align-items: center;
-            padding: 0 16px;
-            border-bottom: 1px solid var(--vscode-panel-border);
-            gap: 8px;
-        }
-        .toolbar button {
-            background: var(--vscode-button-background);
-            color: var(--vscode-button-foreground);
-            border: none;
-            padding: 4px 12px;
-            border-radius: 4px;
-            cursor: pointer;
-        }
-        .toolbar button:hover {
-            background: var(--vscode-button-hoverBackground);
-        }
-        .main {
-            flex: 1;
-            display: flex;
-            overflow: hidden;
-        }
-        .sidebar {
-            width: 250px;
-            border-right: 1px solid var(--vscode-panel-border);
-            padding: 16px;
-            overflow-y: auto;
-        }
-        .canvas {
-            flex: 1;
-            position: relative;
-            background: var(--vscode-editor-background);
-            background-image: radial-gradient(circle, var(--vscode-panel-border) 1px, transparent 1px);
-            background-size: 20px 20px;
-        }
-        .node-palette {
-            display: flex;
-            flex-direction: column;
-            gap: 8px;
-        }
-        .node-item {
-            padding: 12px;
-            background: var(--vscode-panel-background);
-            border: 1px solid var(--vscode-panel-border);
-            border-radius: 6px;
-            cursor: grab;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-        .node-item:hover {
-            background: var(--vscode-list-hoverBackground);
-        }
-        .node-item .icon {
-            width: 20px;
-            height: 20px;
-            border-radius: 4px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 12px;
-        }
-        .properties {
-            width: 300px;
-            border-left: 1px solid var(--vscode-panel-border);
-            padding: 16px;
-            display: none;
-        }
-        .properties.visible {
-            display: block;
-        }
-        .placeholder {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            text-align: center;
-            color: var(--vscode-descriptionForeground);
-        }
-    </style>
 </head>
 <body>
-    <div id="root">
-        <div class="toolbar">
-            <button onclick="runWorkflow()">▶ Run</button>
-            <button onclick="debugWorkflow()">🐛 Debug</button>
-            <button onclick="saveWorkflow()">💾 Save</button>
-            <span style="margin-left: auto;">${workflow.name}</span>
-        </div>
-        <div class="main">
-            <div class="sidebar">
-                <h3>Nodes</h3>
-                <div class="node-palette">
-                    <div class="node-item" draggable="true" data-type="start">
-                        <div class="icon" style="background: #4CAF50;">▶</div>
-                        <span>Start</span>
-                    </div>
-                    <div class="node-item" draggable="true" data-type="end">
-                        <div class="icon" style="background: #F44336;">■</div>
-                        <span>End</span>
-                    </div>
-                    <div class="node-item" draggable="true" data-type="code">
-                        <div class="icon" style="background: #2196F3;">{ }</div>
-                        <span>Code</span>
-                    </div>
-                    <div class="node-item" draggable="true" data-type="llm">
-                        <div class="icon" style="background: #9C27B0;">✨</div>
-                        <span>LLM</span>
-                    </div>
-                    <div class="node-item" draggable="true" data-type="switch">
-                        <div class="icon" style="background: #FF9800;">◆</div>
-                        <span>Switch</span>
-                    </div>
-                    <div class="node-item" draggable="true" data-type="parallel">
-                        <div class="icon" style="background: #00BCD4;">⚡</div>
-                        <span>Parallel</span>
-                    </div>
-                    <div class="node-item" draggable="true" data-type="merge">
-                        <div class="icon" style="background: #795548;">⚹</div>
-                        <span>Merge</span>
-                    </div>
-                </div>
-            </div>
-            
-            <div class="canvas" id="canvas">
-                <div class="placeholder">
-                    <p>Drag nodes here to build your workflow</p>
-                    <p style="font-size: 12px; margin-top: 8px;">${workflow.nodes.length} nodes, ${workflow.edges.length} edges</p>
-                </div>
-            </div>
-            
-            <div class="properties" id="properties">
-                <h3>Properties</h3>
-                <p>Select a node to edit properties</p>
-            </div>
-        </div>
-    </div>
-
+    <div id="root"></div>
     <script nonce="${nonce}">
-        const vscode = acquireVsCodeApi();
-        const workflow = ${JSON.stringify(workflow)};
-        
-        // 拖拽功能
-        document.querySelectorAll('.node-item').forEach(item => {
-            item.addEventListener('dragstart', (e) => {
-                e.dataTransfer.setData('nodeType', item.dataset.type);
-            });
-        });
-        
-        const canvas = document.getElementById('canvas');
-        canvas.addEventListener('dragover', (e) => {
-            e.preventDefault();
-        });
-        
-        canvas.addEventListener('drop', (e) => {
-            e.preventDefault();
-            const nodeType = e.dataTransfer.getData('nodeType');
-            const rect = canvas.getBoundingClientRect();
-            const x = e.clientX - rect.left;
-            const y = e.clientY - rect.top;
-            
-            addNode(nodeType, x, y);
-        });
-        
-        function addNode(type, x, y) {
-            const node = {
-                id: 'node_' + Date.now(),
-                type: type,
-                position: { x, y },
-                data: {},
-                inputs: [],
-                outputs: []
-            };
-            
-            workflow.nodes.push(node);
-            vscode.postMessage({
-                type: 'node:add',
-                payload: { workflow, node }
-            });
-            
-            updatePlaceholder();
-        }
-        
-        function updatePlaceholder() {
-            const placeholder = document.querySelector('.placeholder p:last-child');
-            if (placeholder) {
-                placeholder.textContent = workflow.nodes.length + ' nodes, ' + workflow.edges.length + ' edges';
-            }
-        }
-        
-        function runWorkflow() {
-            vscode.postMessage({ type: 'workflow:run' });
-        }
-        
-        function debugWorkflow() {
-            vscode.postMessage({ type: 'workflow:debug' });
-        }
-        
-        function saveWorkflow() {
-            vscode.postMessage({
-                type: 'workflow:save',
-                payload: workflow
-            });
-        }
-        
-        // 监听来自扩展的消息
-        window.addEventListener('message', (e) => {
-            const message = e.data;
-            switch (message.type) {
-                case 'workflow:update':
-                    // 更新工作流数据
-                    Object.assign(workflow, message.payload);
-                    updatePlaceholder();
-                    break;
-            }
-        });
+        window.__WORKFLOW_DATA__ = ${JSON.stringify(workflow)};
     </script>
+    <script type="module" nonce="${nonce}" src="${scriptUri}"></script>
 </body>
 </html>`;
     }

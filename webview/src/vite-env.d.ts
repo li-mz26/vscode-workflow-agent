@@ -8,6 +8,9 @@ interface VSCodeAPI {
 
 declare global {
     function acquireVsCodeApi(): VSCodeAPI;
+    interface Window {
+        __WORKFLOW_DATA__?: any;
+    }
 }
 
 export {};

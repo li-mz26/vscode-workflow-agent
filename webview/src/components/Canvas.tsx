@@ -164,7 +164,7 @@ export const Canvas: React.FC<CanvasProps> = ({ onNodeSelect }) => {
             onMouseUp={handleMouseUp}
         >
             <defs>
-                <!-- Grid pattern -->
+                {/* Grid pattern */}
                 <pattern
                     id="grid"
                     width="20"
@@ -180,7 +180,7 @@ export const Canvas: React.FC<CanvasProps> = ({ onNodeSelect }) => {
                     />
                 </pattern>
                 
-                <!-- Arrow marker -->
+                {/* Arrow marker */}
                 <marker
                     id="arrowhead"
                     markerWidth="10"
@@ -196,7 +196,7 @@ export const Canvas: React.FC<CanvasProps> = ({ onNodeSelect }) => {
                 </marker>
             </defs>
             
-            <!-- Background grid -->
+            {/* Background grid */}
             <rect
                 x={-5000}
                 y={-5000}
@@ -205,9 +205,9 @@ export const Canvas: React.FC<CanvasProps> = ({ onNodeSelect }) => {
                 fill="url(#grid)"
             />
             
-            <!-- Transform group for pan/zoom -->
+            {/* Transform group for pan/zoom */}
             <g transform={`translate(${viewport.pan.x}, ${viewport.pan.y}) scale(${viewport.zoom})`}>
-                <!-- Edges -->
+                {/* Edges */}
                 {workflow.edges.map(edge => {
                     const sourceNode = workflow.nodes.find(n => n.id === edge.source.nodeId);
                     const targetNode = workflow.nodes.find(n => n.id === edge.target.nodeId);
@@ -231,7 +231,7 @@ export const Canvas: React.FC<CanvasProps> = ({ onNodeSelect }) => {
                     );
                 })}
                 
-                <!-- Connecting line -->
+                {/* Connecting line */}
                 {connectingFrom && (() => {
                     const sourceNode = workflow.nodes.find(n => n.id === connectingFrom.nodeId);
                     if (!sourceNode) return null;
@@ -256,7 +256,7 @@ export const Canvas: React.FC<CanvasProps> = ({ onNodeSelect }) => {
                     );
                 })()}
                 
-                <!-- Nodes -->
+                {/* Nodes */}
                 {workflow.nodes.map(node => (
                     <NodeComponent
                         key={node.id}

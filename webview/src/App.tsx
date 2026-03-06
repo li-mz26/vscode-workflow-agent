@@ -15,6 +15,12 @@ function App() {
     
     // Load workflow from VSCode
     useEffect(() => {
+        // 从 window.__WORKFLOW_DATA__ 加载初始数据
+        const initialWorkflow = (window as any).__WORKFLOW_DATA__;
+        if (initialWorkflow) {
+            setWorkflow(initialWorkflow);
+        }
+        
         const handleMessage = (event: MessageEvent) => {
             const message = event.data;
             switch (message.type) {
@@ -121,7 +127,7 @@ function App() {
                     onDragOver={(e) => e.preventDefault()}
                     onDrop={handleCanvasDrop}
                 >
-                    <Canvas onNodeSelect={setSelectedNodeId} /
+                    <Canvas onNodeSelect={setSelectedNodeId} />
                 </div>
                 
                 <div style={{ width: '280px', flexShrink: 0 }}>
