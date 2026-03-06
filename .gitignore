@@ -1,0 +1,71 @@
+# Dependencies
+node_modules/
+**/node_modules/
+
+# Build outputs
+out/
+dist/
+build/
+*.vsix
+
+# TypeScript
+*.d.ts
+*.d.ts.map
+*.js.map
+
+# Compiled JavaScript (source maps only, keep .js for execution)
+# But we need out/ for the extension to work, so handle carefully
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Runtime data
+pids/
+*.pid
+*.seed
+*.pid.lock
+
+# Coverage directory used by tools like istanbul
+coverage/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Test files (keep source, ignore outputs)
+*.test.js
+*.spec.js
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+# Webview build outputs (keep source)
+webview/node_modules/
+webview/dist/
+
+# Source maps in webview
+webview/**/*.js.map
+webview/**/*.d.ts
+webview/**/*.d.ts.map
+
+# Keep the compiled JS files in out/ for extension to work
+# But ignore source maps
+out/**/*.map
+
+# Scripts output
+scripts/**/*.d.ts
+scripts/**/*.d.ts.map
+scripts/**/*.js.map
