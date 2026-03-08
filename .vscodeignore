@@ -1,21 +1,58 @@
-.vscode/**
-.vscode-test/**
-src/**
-webview/**
-out/**/*.map
-scripts/**
+# Source files (only compiled output needed)
+src/
+webview/src/
+tests/
+scripts/
+
+# Build artifacts (rebuilt during packaging)
+out/webview/
+
+# Development files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Dependencies (installed during build)
+node_modules/
+webview/node_modules/
+
+# Logs and temp files
+logs/
+*.log
+npm-debug.log*
+tmp/
+temp/
+*.tmp
+
+# Git
+.git/
 .gitignore
-.yarnrc
-vsc-extension-quickstart.md
-**/tsconfig.json
-**/.eslintrc.json
-**/*.map
-**/*.ts
-!**/*.d.ts
-node_modules/**
-!node_modules/@modelcontextprotocol
-!node_modules/zod
-docs/**
-tests/**
-.git/**
-*.vsix
+
+# Documentation (not needed in extension)
+*.md
+!readme.md
+
+# Source maps (for debugging only)
+*.map
+
+# Test files
+*.test.ts
+*.spec.ts
+*.test.js
+*.spec.js
+
+# Lock files
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+
+# Archives
+*.tar.gz
+*.zip
+
+# CI/CD
+.github/
+.vscode-test/
