@@ -8,6 +8,7 @@ interface NodeComponentProps {
     onDrag: (nodeId: string, delta: Position) => void;
     onDragStart?: (nodeId: string) => void;
     onDragMove?: (nodeId: string, clientX: number, clientY: number) => void;
+    onDragEnd?: (nodeId: string, clientX: number, clientY: number) => void;
     onClick: (nodeId: string, multi: boolean) => void;
     onPortMouseDown: (nodeId: string, portId: string, isOutput: boolean) => void;
     onPortMouseUp: (nodeId: string, portId: string, isInput: boolean) => void;
@@ -25,11 +26,11 @@ export const NodeComponent: React.FC<NodeComponentProps> = ({
     onDrag,
     onDragStart,
     onDragMove,
+    onDragEnd,
     onClick,
     onPortMouseDown,
     onPortMouseUp
 }) => {
-    // 使用 ref 存储所有拖动状态，避免闭包问题
     const isDraggingRef = useRef(false);
     const dragStartedRef = useRef(false);
     const lastPosRef = useRef({ x: 0, y: 0 });
@@ -59,7 +60,6 @@ export const NodeComponent: React.FC<NodeComponentProps> = ({
         }
     };
     
-    // 清理函数
     const cleanup = () => {
         isDraggingRef.current = false;
         dragStartedRef.current = false;
@@ -73,10 +73,7 @@ export const NodeComponent: React.FC<NodeComponentProps> = ({
         const deltaX = e.clientX - lastPosRef.current.x;
         const deltaY = e.clientY - lastPosRef.current.y;
 
-        // 首次移动超过阈值才算开始拖动
         if (!dragStartedRef.current) {
-            const totalDelta = Math.abs(e.clientX - lastPosRef.current.x) + Math.abs(e.clientY - lastPosRef.current.y);
-            // 使用累积移动距离判断是否开始拖动
             if (Math.abs(deltaX) > 3 || Math.abs(deltaY) > 3) {
                 dragStartedRef.current = true;
                 onDragStart?.(node.id);
@@ -92,26 +89,28 @@ export const NodeComponent: React.FC<NodeComponentProps> = ({
         lastPosRef.current.y = e.clientY;
     };
     
-    const handleMouseUp = () => {
+    const handleMouseUp = (e: MouseEvent) => {
+        const wasDragging = dragStartedRef.current;
         cleanup();
-        // 强制重新渲染以更新 cursor 样式
         forceUpdate();
+        
+        // 如果确实开始拖动了，通知拖动结束（用于删除区域检测）
+        if (wasDragging) {
+            onDragEnd?.(node.id, e.clientX, e.clientY);
+        }
     };
     
-    // 强制更新 trick
     const [, forceUpdate] = React.useReducer((x: number) => x + 1, 0);
     
     const handleMouseDown = (e: React.MouseEvent) => {
         if (e.button !== 0) return;
         
-        // 清理之前可能残留的状态
         cleanup();
         
         isDraggingRef.current = true;
         lastPosRef.current.x = e.clientX;
         lastPosRef.current.y = e.clientY;
         
-        // 立即添加全局事件监听
         document.addEventListener('mousemove', handleMouseMove);
         document.addEventListener('mouseup', handleMouseUp);
         
@@ -120,7 +119,6 @@ export const NodeComponent: React.FC<NodeComponentProps> = ({
         e.stopPropagation();
     };
     
-    // 组件卸载时清理
     useEffect(() => {
         return cleanup;
     }, []);

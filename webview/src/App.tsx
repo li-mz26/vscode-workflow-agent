@@ -364,6 +364,33 @@ function App() {
                                         setIsDeleteZoneActive(isInDeleteZone);
                                     }
                                 }}
+                                onNodeDragEnd={(nodeId, clientX, clientY) => {
+                                    if (deleteZoneRef.current) {
+                                        const rect = deleteZoneRef.current.getBoundingClientRect();
+                                        const isInDeleteZone =
+                                            clientX >= rect.left &&
+                                            clientX <= rect.right &&
+                                            clientY >= rect.top &&
+                                            clientY <= rect.bottom;
+                                        
+                                        if (isInDeleteZone && workflow) {
+                                            const node = workflow.nodes.find(n => n.id === nodeId);
+                                            if (node) {
+                                                deleteNode(nodeId);
+                                                vscode.postMessage({
+                                                    type: 'node:delete',
+                                                    payload: {
+                                                        workflow,
+                                                        nodeId,
+                                                        nodeType: node.type
+                                                    }
+                                                });
+                                            }
+                                        }
+                                    }
+                                    setIsDeleteZoneActive(false);
+                                    setDraggedNodeId(null);
+                                }}
                                 executionState={executionState}
                             />
                             
