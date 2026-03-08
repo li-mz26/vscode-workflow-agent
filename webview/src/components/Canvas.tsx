@@ -38,6 +38,13 @@ export const Canvas: React.FC<CanvasProps> = ({
     const [isPanning, setIsPanning] = useState(false);
     const [panStart, setPanStart] = useState<Position>({ x: 0, y: 0 });
     
+    // 使用 ref 存储拖动状态，避免闭包问题
+    const dragStateRef = useRef<{
+        isDragging: boolean;
+        nodeId: string | null;
+        lastPos: Position;
+    }>({ isDragging: false, nodeId: null, lastPos: { x: 0, y: 0 } });
+    
     const {
         workflow,
         viewport,
@@ -53,9 +60,6 @@ export const Canvas: React.FC<CanvasProps> = ({
         moveNode,
         addEdge
     } = useCanvasStore();
-    
-    // 存储拖动节点的起始位置，避免闭包问题
-    const dragStartPosRef = useRef<Map<string, Position>>(new Map());
     
     // Transform mouse position to canvas coordinates
     const screenToCanvas = useCallback((x: number, y: number): Position => {
@@ -95,10 +99,12 @@ export const Canvas: React.FC<CanvasProps> = ({
     // Handle mouse down for panning or selection
     const handleMouseDown = useCallback((e: React.MouseEvent) => {
         if (e.button === 1 || (e.button === 0 && e.shiftKey)) {
+            // Middle mouse or Shift+Click = pan
             setIsPanning(true);
             setPanStart({ x: e.clientX, y: e.clientY });
             e.preventDefault();
         } else if (e.button === 0 && e.target === svgRef.current) {
+            // Left click on canvas = deselect
             deselectAll();
             onNodeSelect?.(null);
         }
@@ -121,40 +127,29 @@ export const Canvas: React.FC<CanvasProps> = ({
         }
     }, [isPanning, panStart, pan, screenToCanvas, setMousePosition]);
     
-    // Handle mouse up - 只处理画布的 panning
+    // Handle mouse up
     const handleMouseUp = useCallback(() => {
         setIsPanning(false);
-    }, []);
-    
-    // Handle node drag start - 记录起始位置
-    const handleNodeDragStart = useCallback((nodeId: string) => {
-        const node = workflow?.nodes.find(n => n.id === nodeId);
-        if (node) {
-            dragStartPosRef.current.set(nodeId, { ...node.position });
-        }
-        setDraggingNode(nodeId);
-        onNodeDragStart?.(nodeId);
-    }, [workflow, onNodeDragStart, setDraggingNode]);
-    
-    // Handle node drag - 基于起始位置计算新位置
-    const handleNodeDrag = useCallback((nodeId: string, delta: Position) => {
-        const startPos = dragStartPosRef.current.get(nodeId);
-        if (!startPos) return;
-        
-        const currentViewport = useCanvasStore.getState().viewport;
-        
-        // 计算新位置 = 起始位置 + 累积的 delta
-        const newX = startPos.x + delta.x / currentViewport.zoom;
-        const newY = startPos.y + delta.y / currentViewport.zoom;
-        
-        moveNode(nodeId, { x: newX, y: newY });
-    }, [moveNode]);
-    
-    // Handle node drag end - 清理
-    const handleNodeDragEnd = useCallback((nodeId: string) => {
-        dragStartPosRef.current.delete(nodeId);
+        // 重置拖动状态
+        dragStateRef.current.isDragging = false;
+        dragStateRef.current.nodeId = null;
         setDraggingNode(null);
     }, [setDraggingNode]);
+    
+    // Handle node drag - 修复：直接使用 store 获取最新位置
+    const handleNodeDrag = useCallback((nodeId: string, delta: Position) => {
+        // 直接从 store 获取最新的 workflow 和节点位置
+        const currentWorkflow = useCanvasStore.getState().workflow;
+        const currentViewport = useCanvasStore.getState().viewport;
+        
+        const node = currentWorkflow?.nodes.find(n => n.id === nodeId);
+        if (node) {
+            moveNode(nodeId, {
+                x: node.position.x + delta.x / currentViewport.zoom,
+                y: node.position.y + delta.y / currentViewport.zoom
+            });
+        }
+    }, [moveNode]);
     
     // Handle port connection start
     const handlePortMouseDown = useCallback((nodeId: string, portId: string, isOutput: boolean) => {
@@ -166,6 +161,7 @@ export const Canvas: React.FC<CanvasProps> = ({
     // Handle port connection end
     const handlePortMouseUp = useCallback((nodeId: string, portId: string, isInput: boolean) => {
         if (connectingFrom && isInput) {
+            // Create edge
             const edge: EdgeData = {
                 id: `edge_${Date.now()}`,
                 source: connectingFrom,
@@ -181,6 +177,28 @@ export const Canvas: React.FC<CanvasProps> = ({
         selectNode(nodeId, multi);
         onNodeSelect?.(nodeId);
     }, [selectNode, onNodeSelect]);
+
+    // Handle node drag start (for delete zone)
+    const handleNodeDragStart = useCallback((nodeId: string) => {
+        dragStateRef.current.nodeId = nodeId;
+        dragStateRef.current.isDragging = true;
+        setDraggingNode(nodeId);
+        onNodeDragStart?.(nodeId);
+    }, [onNodeDragStart, setDraggingNode]);
+    
+    // Global mouse up handler
+    useEffect(() => {
+        const handleGlobalMouseUp = () => {
+            setIsPanning(false);
+            dragStateRef.current.isDragging = false;
+            dragStateRef.current.nodeId = null;
+            setDraggingNode(null);
+            setConnectingFrom(null);
+        };
+        
+        window.addEventListener('mouseup', handleGlobalMouseUp);
+        return () => window.removeEventListener('mouseup', handleGlobalMouseUp);
+    }, [setDraggingNode, setConnectingFrom]);
     
     if (!workflow) {
         return (
@@ -213,14 +231,38 @@ export const Canvas: React.FC<CanvasProps> = ({
             onMouseUp={handleMouseUp}
         >
             <defs>
-                <pattern id="grid" width="20" height="20" patternUnits="userSpaceOnUse">
-                    <circle cx="1" cy="1" r="1" fill="var(--vscode-panel-border)" opacity="0.5"/>
+                {/* Grid pattern */}
+                <pattern
+                    id="grid"
+                    width="20"
+                    height="20"
+                    patternUnits="userSpaceOnUse"
+                >
+                    <circle
+                        cx="1"
+                        cy="1"
+                        r="1"
+                        fill="var(--vscode-panel-border)"
+                        opacity="0.5"
+                    />
                 </pattern>
                 
-                <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
-                    <polygon points="0 0, 10 3.5, 0 7" fill="var(--vscode-foreground)"/>
+                {/* Arrow marker */}
+                <marker
+                    id="arrowhead"
+                    markerWidth="10"
+                    markerHeight="7"
+                    refX="9"
+                    refY="3.5"
+                    orient="auto"
+                >
+                    <polygon
+                        points="0 0, 10 3.5, 0 7"
+                        fill="var(--vscode-foreground)"
+                    />
                 </marker>
 
+                {/* 执行状态滤镜 */}
                 <filter id="glow-running">
                     <feGaussianBlur stdDeviation="3" result="coloredBlur"/>
                     <feMerge>
@@ -230,11 +272,19 @@ export const Canvas: React.FC<CanvasProps> = ({
                 </filter>
             </defs>
             
-            <rect x={-5000} y={-5000} width={10000} height={10000} fill="url(#grid)"/>
+            {/* Background grid */}
+            <rect
+                x={-5000}
+                y={-5000}
+                width={10000}
+                height={10000}
+                fill="url(#grid)"
+            />
             
+            {/* Transform group for pan/zoom */}
             <g transform={`translate(${viewport.pan.x}, ${viewport.pan.y}) scale(${viewport.zoom})`}>
-                {/* Edges */}
-                {workflow.edges.map((edge) => {
+                {/* Edges with data flow animation */}
+                {workflow.edges.map((edge, index) => {
                     const sourceNode = workflow.nodes.find(n => n.id === edge.source.nodeId);
                     const targetNode = workflow.nodes.find(n => n.id === edge.target.nodeId);
                     
@@ -247,13 +297,19 @@ export const Canvas: React.FC<CanvasProps> = ({
                         edge.target.portId
                     );
                     
+                    // 检查是否有数据流动
                     const isFlowing = executionState?.nodeStates.find(
                         s => s.nodeId === edge.source.nodeId && s.status === 'success'
                     );
                     
                     return (
                         <g key={edge.id}>
-                            <EdgeComponent edge={edge} path={path} selected={false} isFlowing={!!isFlowing}/>
+                            <EdgeComponent
+                                edge={edge}
+                                path={path}
+                                selected={false}
+                                isFlowing={!!isFlowing}
+                            />
                         </g>
                     );
                 })}
@@ -271,8 +327,10 @@ export const Canvas: React.FC<CanvasProps> = ({
                     
                     return (
                         <line
-                            x1={startX} y1={startY}
-                            x2={mousePosition.x} y2={mousePosition.y}
+                            x1={startX}
+                            y1={startY}
+                            x2={mousePosition.x}
+                            y2={mousePosition.y}
                             stroke="var(--vscode-foreground)"
                             strokeWidth={2 / viewport.zoom}
                             strokeDasharray={`${5 / viewport.zoom},${5 / viewport.zoom}`}
@@ -293,7 +351,6 @@ export const Canvas: React.FC<CanvasProps> = ({
                             executionStatus={nodeState?.status || 'idle'}
                             onDrag={handleNodeDrag}
                             onDragStart={handleNodeDragStart}
-                            onDragEnd={handleNodeDragEnd}
                             onDragMove={onNodeDragMove}
                             onClick={handleNodeClick}
                             onPortMouseDown={handlePortMouseDown}

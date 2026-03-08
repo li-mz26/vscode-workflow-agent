@@ -7,7 +7,6 @@ interface NodeComponentProps {
     executionStatus?: 'idle' | 'running' | 'success' | 'error';
     onDrag: (nodeId: string, delta: Position) => void;
     onDragStart?: (nodeId: string) => void;
-    onDragEnd?: (nodeId: string) => void;
     onDragMove?: (nodeId: string, clientX: number, clientY: number) => void;
     onClick: (nodeId: string, multi: boolean) => void;
     onPortMouseDown: (nodeId: string, portId: string, isOutput: boolean) => void;
@@ -25,7 +24,6 @@ export const NodeComponent: React.FC<NodeComponentProps> = ({
     executionStatus = 'idle',
     onDrag,
     onDragStart,
-    onDragEnd,
     onDragMove,
     onClick,
     onPortMouseDown,
@@ -33,21 +31,15 @@ export const NodeComponent: React.FC<NodeComponentProps> = ({
 }) => {
     const [isDragging, setIsDragging] = useState(false);
     
-    // 使用 ref 存储拖动状态，避免闭包问题和 state 延迟
+    // 使用 ref 存储拖动状态，避免闭包问题
     const dragStateRef = useRef({
         isActive: false,
-        nodeId: node.id,
         startX: 0,
         startY: 0,
         lastX: 0,
         lastY: 0,
         dragStarted: false
     });
-    
-    // 同步 node.id 到 ref
-    useEffect(() => {
-        dragStateRef.current.nodeId = node.id;
-    }, [node.id]);
     
     const color = node.metadata?.color || '#666';
     const title = node.metadata?.name || node.type;
@@ -58,94 +50,96 @@ export const NodeComponent: React.FC<NodeComponentProps> = ({
         Math.max(node.inputs.length, node.outputs.length) * PORT_SPACING + 20
     );
 
+    // 根据执行状态获取边框颜色
     const getExecutionBorderColor = () => {
         switch (executionStatus) {
-            case 'running': return '#FFA500';
-            case 'success': return '#4CAF50';
-            case 'error': return '#F44336';
-            default: return null;
+            case 'running':
+                return '#FFA500'; // 橙色
+            case 'success':
+                return '#4CAF50'; // 绿色
+            case 'error':
+                return '#F44336'; // 红色
+            default:
+                return null;
         }
     };
 
+    // 根据执行状态获取背景效果
     const getExecutionBackground = () => {
         switch (executionStatus) {
-            case 'running': return 'url(#glow-running)';
-            default: return undefined;
+            case 'running':
+                return 'url(#glow-running)';
+            default:
+                return undefined;
         }
     };
     
-    // 清理拖动状态 - 确保所有状态都被重置
-    const clearDragState = useCallback(() => {
+    const handleMouseDown = useCallback((e: React.MouseEvent) => {
+        if (e.button === 0) {
+            // 初始化拖动状态
+            dragStateRef.current.isActive = true;
+            dragStateRef.current.startX = e.clientX;
+            dragStateRef.current.startY = e.clientY;
+            dragStateRef.current.lastX = e.clientX;
+            dragStateRef.current.lastY = e.clientY;
+            dragStateRef.current.dragStarted = false;
+            
+            setIsDragging(true);
+            onClick(node.id, e.metaKey || e.ctrlKey);
+            e.stopPropagation();
+        }
+    }, [node.id, onClick]);
+    
+    // 全局鼠标移动事件处理（用于拖动时不被区域外打断）
+    const handleGlobalMouseMove = useCallback((e: globalThis.MouseEvent) => {
+        if (!dragStateRef.current.isActive) return;
+
+        // 计算增量（相对于上一次位置）
+        const deltaX = e.clientX - dragStateRef.current.lastX;
+        const deltaY = e.clientY - dragStateRef.current.lastY;
+
+        // 首次移动时触发 dragStart
+        if (!dragStateRef.current.dragStarted) {
+            const totalDeltaX = Math.abs(e.clientX - dragStateRef.current.startX);
+            const totalDeltaY = Math.abs(e.clientY - dragStateRef.current.startY);
+            
+            if (totalDeltaX > 3 || totalDeltaY > 3) {
+                dragStateRef.current.dragStarted = true;
+                onDragStart?.(node.id);
+            }
+        }
+
+        // 如果已经开始拖动，通知更新
+        if (dragStateRef.current.dragStarted) {
+            // 拖动过程中通知父组件鼠标位置
+            onDragMove?.(node.id, e.clientX, e.clientY);
+
+            onDrag(node.id, { x: deltaX, y: deltaY });
+            
+            // 更新上一次位置
+            dragStateRef.current.lastX = e.clientX;
+            dragStateRef.current.lastY = e.clientY;
+        }
+    }, [node.id, onDrag, onDragStart, onDragMove]);
+
+    const handleGlobalMouseUp = useCallback(() => {
         dragStateRef.current.isActive = false;
         dragStateRef.current.dragStarted = false;
         setIsDragging(false);
     }, []);
-    
-    const handleMouseDown = useCallback((e: React.MouseEvent) => {
-        if (e.button !== 0) return;
-        
-        // 先清理之前可能残留的状态
-        clearDragState();
-        
-        // 初始化新的拖动状态
-        dragStateRef.current.isActive = true;
-        dragStateRef.current.startX = e.clientX;
-        dragStateRef.current.startY = e.clientY;
-        dragStateRef.current.lastX = e.clientX;
-        dragStateRef.current.lastY = e.clientY;
-        dragStateRef.current.dragStarted = false;
-        
-        setIsDragging(true);
-        onClick(node.id, e.metaKey || e.ctrlKey);
-        e.stopPropagation();
-    }, [node.id, onClick, clearDragState]);
-    
-    // 全局鼠标移动处理 - 使用 ref 中的函数避免依赖问题
+
+    // 使用全局事件监听，确保拖动时不丢失控制
     useEffect(() => {
-        if (!isDragging) return;
-        
-        const handleMouseMove = (e: MouseEvent) => {
-            if (!dragStateRef.current.isActive) return;
+        if (isDragging) {
+            window.addEventListener('mousemove', handleGlobalMouseMove);
+            window.addEventListener('mouseup', handleGlobalMouseUp);
 
-            const deltaX = e.clientX - dragStateRef.current.lastX;
-            const deltaY = e.clientY - dragStateRef.current.lastY;
-
-            // 检查是否开始拖动（超过阈值）
-            if (!dragStateRef.current.dragStarted) {
-                const totalDeltaX = Math.abs(e.clientX - dragStateRef.current.startX);
-                const totalDeltaY = Math.abs(e.clientY - dragStateRef.current.startY);
-                
-                if (totalDeltaX > 3 || totalDeltaY > 3) {
-                    dragStateRef.current.dragStarted = true;
-                    onDragStart?.(dragStateRef.current.nodeId);
-                }
-            }
-
-            // 执行拖动
-            if (dragStateRef.current.dragStarted) {
-                onDragMove?.(dragStateRef.current.nodeId, e.clientX, e.clientY);
-                onDrag(dragStateRef.current.nodeId, { x: deltaX, y: deltaY });
-                dragStateRef.current.lastX = e.clientX;
-                dragStateRef.current.lastY = e.clientY;
-            }
-        };
-
-        const handleMouseUp = () => {
-            if (dragStateRef.current.dragStarted) {
-                onDragEnd?.(dragStateRef.current.nodeId);
-            }
-            clearDragState();
-        };
-
-        // 使用 capture 阶段确保能捕获事件
-        window.addEventListener('mousemove', handleMouseMove, { capture: true });
-        window.addEventListener('mouseup', handleMouseUp, { capture: true });
-
-        return () => {
-            window.removeEventListener('mousemove', handleMouseMove, { capture: true });
-            window.removeEventListener('mouseup', handleMouseUp, { capture: true });
-        };
-    }, [isDragging, onDrag, onDragStart, onDragEnd, onDragMove, clearDragState]);
+            return () => {
+                window.removeEventListener('mousemove', handleGlobalMouseMove);
+                window.removeEventListener('mouseup', handleGlobalMouseUp);
+            };
+        }
+    }, [isDragging, handleGlobalMouseMove, handleGlobalMouseUp]);
 
     const executionBorderColor = getExecutionBorderColor();
     
