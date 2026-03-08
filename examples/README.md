@@ -1,58 +1,83 @@
-# Workflow Agent 示例工作流
+# VSCode Workflow Agent 示例
 
-这个目录包含了一些示例工作流，用于展示 Workflow Agent 的功能。
+本目录包含多个示例工作流，展示不同场景下的使用方法。
 
-## 示例列表
+## 文件说明
 
-### 1. data-analysis-pipeline.workflow.json
-**数据分析与告警管道** - 一个完整的数据处理和告警工作流
+### 节点类型定义
+- **node-types.json** - 所有支持的节点类型定义，包含输入输出端口、配置Schema等
 
-#### 工作流说明
-这个工作流演示了一个真实的运维监控场景：
+### 示例工作流
 
-1. **定时触发** - 每5分钟自动执行
-2. **HTTP请求** - 从监控系统API拉取指标数据
-3. **代码处理** - 使用Python验证数据并计算统计值（CPU/内存平均值、峰值）
-4. **条件判断** - 根据告警级别分流：
-   - 严重告警（内存>90%）→ 发送紧急通知
-   - 一般告警（CPU>80%）→ 发送普通通知
-   - 正常 → 记录日志
-5. **并行处理** - 同时执行告警发送和日志保存
-6. **智能分析** - 使用LLM分析系统状态（可选分支）
-7. **合并结果** - 等待所有分支完成
-8. **结束** - 输出执行结果
+#### 01-hello-world.workflow.json
+最基础的示例，展示工作流的基本结构：
+- 开始 → 代码执行 → 结束
+- 演示变量传递和基础代码执行
 
-#### 节点类型展示
-- ✅ Start/End 节点
-- ✅ HTTP Request 节点（API调用）
-- ✅ Code 节点（Python代码执行）
-- ✅ Switch 节点（条件分支）
-- ✅ Parallel/Merge 节点（并行处理）
-- ✅ Webhook 节点（Slack通知）
-- ✅ LLM 节点（智能分析）
+#### 02-api-data-processing.workflow.json
+API 数据处理示例：
+- 从外部 API 获取数据
+- 使用代码节点处理和转换数据
+- 展示 HTTP 节点的使用
 
-#### 使用方法
-1. 在 VSCode 中打开 Workflow Agent 侧边栏
-2. 添加 `examples` 文件夹作为工作流文件夹
-3. 双击 `data-analysis-pipeline` 打开可视化编辑器
-4. 点击节点可以编辑配置
-5. 拖拽连接可以修改工作流逻辑
+#### 03-conditional-branching.workflow.json
+条件分支示例：
+- 使用 Switch 节点根据条件选择不同分支
+- 模拟成绩判断场景（优秀/良好/不及格）
+- 展示多分支合并
 
-## 自定义配置
+#### 04-parallel-processing.workflow.json
+并行处理示例：
+- 使用 Parallel 节点同时执行多个任务
+- 三个独立的数据处理任务并行运行
+- 合并所有任务的结果
 
-编辑工作流时，可以修改以下变量：
+#### 05-llm-text-analysis.workflow.json
+LLM 文本分析示例：
+- 使用 LLM 节点进行情感分析
+- 同时生成内容摘要
+- 展示大语言模型的应用场景
 
-| 变量名 | 类型 | 默认值 | 说明 |
-|--------|------|--------|------|
-| `api_token` | string | - | API认证令牌 |
-| `webhook_url` | string | - | Slack Webhook地址 |
-| `cpu_threshold` | number | 80 | CPU告警阈值(%) |
-| `memory_threshold` | number | 90 | 内存告警阈值(%) |
+#### 06-monitoring-alert.workflow.json
+监控告警示例：
+- 定时触发（Cron 表达式）
+- 获取系统监控指标
+- 异常时通过 Webhook 发送告警通知
+- 展示完整的监控告警流程
 
-## 创建自己的工作流
+## 使用方法
 
-1. 点击侧边栏 "新建工作流" 按钮
-2. 从左侧节点面板拖拽节点到画布
-3. 连接节点之间的边
-4. 选中节点后在右侧面板编辑配置
-5. 点击 "保存" 按钮保存工作流
+1. 在 VSCode 中打开任意 `.workflow.json` 文件
+2. 编辑器会自动切换到可视化编辑模式
+3. 可以点击工具栏按钮切换回 JSON 文本视图
+4. 支持拖拽节点、连接端口、配置属性
+
+## 变量说明
+
+工作流中使用的变量需要在 `variables` 数组中定义：
+
+```json
+{
+  "variables": [
+    { "name": "api_key", "type": "string", "defaultValue": "" }
+  ]
+}
+```
+
+变量可以在节点配置中使用 `{{variable_name}}` 语法引用。
+
+## 节点类型速查
+
+| 类型 | 类别 | 用途 |
+|------|------|------|
+| start | 基础 | 工作流入口 |
+| end | 基础 | 工作流出口 |
+| code | 基础 | 执行 Python 代码 |
+| llm | 基础 | 调用大语言模型 |
+| switch | 流程控制 | 条件分支 |
+| parallel | 流程控制 | 并行执行 |
+| http | 集成 | HTTP 请求 |
+| webhook | 集成 | 发送通知 |
+| schedule | 流程控制 | 定时触发 |
+
+详细定义请查看 `node-types.json`。

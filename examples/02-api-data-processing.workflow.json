@@ -1,0 +1,109 @@
+{
+  "id": "wf_api_data_processing",
+  "name": "API 数据处理",
+  "description": "从 API 获取数据，进行处理和验证",
+  "version": "1.0.0",
+  "nodes": [
+    {
+      "id": "node_start",
+      "type": "start",
+      "position": { "x": 50, "y": 200 },
+      "inputs": [],
+      "outputs": [
+        { "id": "trigger", "name": "trigger", "type": "data", "dataType": "object", "required": true }
+      ],
+      "metadata": {
+        "name": "开始",
+        "description": "工作流入口",
+        "icon": "play",
+        "color": "#4CAF50"
+      },
+      "data": { "triggerType": "manual" }
+    },
+    {
+      "id": "node_fetch",
+      "type": "http",
+      "position": { "x": 300, "y": 200 },
+      "inputs": [
+        { "id": "input", "name": "input", "type": "data", "dataType": "any", "required": false }
+      ],
+      "outputs": [
+        { "id": "status", "name": "status", "type": "data", "dataType": "number", "required": true },
+        { "id": "body", "name": "body", "type": "data", "dataType": "string", "required": true },
+        { "id": "json", "name": "json", "type": "data", "dataType": "object", "required": false }
+      ],
+      "metadata": {
+        "name": "获取数据",
+        "description": "从 API 获取 JSON 数据",
+        "icon": "globe",
+        "color": "#607D8B"
+      },
+      "data": {
+        "method": "GET",
+        "url": "https://jsonplaceholder.typicode.com/posts/1",
+        "headers": { "Accept": "application/json" },
+        "timeout": 10000,
+        "retryCount": 2
+      }
+    },
+    {
+      "id": "node_process",
+      "type": "code",
+      "position": { "x": 600, "y": 200 },
+      "inputs": [
+        { "id": "input", "name": "input", "type": "data", "dataType": "any", "required": false }
+      ],
+      "outputs": [
+        { "id": "output", "name": "output", "type": "data", "dataType": "any", "required": true }
+      ],
+      "metadata": {
+        "name": "数据处理",
+        "description": "处理和转换数据",
+        "icon": "code",
+        "color": "#2196F3"
+      },
+      "data": {
+        "code": "def main(ctx):\n    data = ctx.get('input', {})\n    if not data:\n        return {'error': 'No data received'}\n    \n    # 数据转换\n    processed = {\n        'id': data.get('id'),\n        'title': data.get('title', '').upper(),\n        'summary': data.get('body', '')[:100] + '...' if len(data.get('body', '')) > 100 else data.get('body', ''),\n        'word_count': len(data.get('body', '').split()),\n        'processed_at': __import__('datetime').datetime.now().isoformat()\n    }\n    return processed",
+        "timeout": 30
+      }
+    },
+    {
+      "id": "node_end",
+      "type": "end",
+      "position": { "x": 900, "y": 200 },
+      "inputs": [
+        { "id": "result", "name": "result", "type": "data", "dataType": "any", "required": false }
+      ],
+      "outputs": [],
+      "metadata": {
+        "name": "结束",
+        "description": "输出处理结果",
+        "icon": "stop",
+        "color": "#F44336"
+      },
+      "data": { "outputMapping": {} }
+    }
+  ],
+  "edges": [
+    {
+      "id": "edge_start_fetch",
+      "source": { "nodeId": "node_start", "portId": "trigger" },
+      "target": { "nodeId": "node_fetch", "portId": "input" }
+    },
+    {
+      "id": "edge_fetch_process",
+      "source": { "nodeId": "node_fetch", "portId": "json" },
+      "target": { "nodeId": "node_process", "portId": "input" }
+    },
+    {
+      "id": "edge_process_end",
+      "source": { "nodeId": "node_process", "portId": "output" },
+      "target": { "nodeId": "node_end", "portId": "result" }
+    }
+  ],
+  "variables": [],
+  "settings": {
+    "timeout": 120,
+    "logLevel": "info"
+  }
+}
