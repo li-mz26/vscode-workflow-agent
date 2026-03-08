@@ -5,7 +5,7 @@ tests/
 scripts/
 
 # Build artifacts (rebuilt during packaging)
-out/webview/
+# Note: out/webview/ IS needed for the webview to work
 
 # Development files
 .vscode/

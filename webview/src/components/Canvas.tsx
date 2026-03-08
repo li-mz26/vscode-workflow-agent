@@ -24,13 +24,15 @@ interface WorkflowExecutionState {
 interface CanvasProps {
     onNodeSelect?: (nodeId: string | null) => void;
     onNodeDragStart?: (nodeId: string) => void;
+    onNodeDragMove?: (nodeId: string, clientX: number, clientY: number) => void;
     executionState?: WorkflowExecutionState | null;
 }
 
-export const Canvas: React.FC<CanvasProps> = ({ 
-    onNodeSelect, 
+export const Canvas: React.FC<CanvasProps> = ({
+    onNodeSelect,
     onNodeDragStart,
-    executionState 
+    onNodeDragMove,
+    executionState
 }) => {
     const svgRef = useRef<SVGSVGElement>(null);
     const [isPanning, setIsPanning] = useState(false);
@@ -330,6 +332,7 @@ export const Canvas: React.FC<CanvasProps> = ({
                             executionStatus={nodeState?.status || 'idle'}
                             onDrag={handleNodeDrag}
                             onDragStart={handleNodeDragStart}
+                            onDragMove={onNodeDragMove}
                             onClick={handleNodeClick}
                             onPortMouseDown={handlePortMouseDown}
                             onPortMouseUp={handlePortMouseUp}

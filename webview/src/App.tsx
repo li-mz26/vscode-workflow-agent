@@ -163,13 +163,71 @@ function App() {
     // Handle debug
     const handleDebug = useCallback(() => {
         if (workflow) {
-            vscode.postMessage({ 
+            vscode.postMessage({
                 type: 'workflow:debug',
-                payload: workflow 
+                payload: workflow
             });
         }
     }, [workflow]);
-    
+
+    // Handle node drag end - check if dropped on delete zone
+    const handleNodeDragEnd = useCallback(() => {
+        if (draggedNodeId && deleteZoneRef.current) {
+            const deleteZoneRect = deleteZoneRef.current.getBoundingClientRect();
+            // Check if delete zone is visible (has reasonable size and opacity)
+            if (deleteZoneRect.width > 0 && deleteZoneRect.height > 0) {
+                const node = workflow?.nodes.find(n => n.id === draggedNodeId);
+                if (node) {
+                    deleteNode(draggedNodeId);
+                    vscode.postMessage({
+                        type: 'node:delete',
+                        payload: {
+                            workflow,
+                            nodeId: draggedNodeId,
+                            nodeType: node.type
+                        }
+                    });
+                }
+            }
+        }
+        setDraggedNodeId(null);
+        setIsDeleteZoneActive(false);
+    }, [draggedNodeId, workflow, deleteNode]);
+
+    // Global mouse up handler to detect delete zone drop
+    useEffect(() => {
+        const handleGlobalMouseUp = (e: MouseEvent) => {
+            if (draggedNodeId && deleteZoneRef.current) {
+                const deleteZoneRect = deleteZoneRef.current.getBoundingClientRect();
+                const isInDeleteZone =
+                    e.clientX >= deleteZoneRect.left &&
+                    e.clientX <= deleteZoneRect.right &&
+                    e.clientY >= deleteZoneRect.top &&
+                    e.clientY <= deleteZoneRect.bottom;
+
+                if (isInDeleteZone) {
+                    const node = workflow?.nodes.find(n => n.id === draggedNodeId);
+                    if (node) {
+                        deleteNode(draggedNodeId);
+                        vscode.postMessage({
+                            type: 'node:delete',
+                            payload: {
+                                workflow,
+                                nodeId: draggedNodeId,
+                                nodeType: node.type
+                            }
+                        });
+                    }
+                }
+            }
+            setDraggedNodeId(null);
+            setIsDeleteZoneActive(false);
+        };
+
+        window.addEventListener('mouseup', handleGlobalMouseUp);
+        return () => window.removeEventListener('mouseup', handleGlobalMouseUp);
+    }, [draggedNodeId, workflow, deleteNode]);
+
     return (
         <div style={{
             display: 'flex',
@@ -205,9 +263,20 @@ function App() {
                     onDragOver={(e) => e.preventDefault()}
                     onDrop={handleCanvasDrop}
                 >
-                    <Canvas 
+                    <Canvas
                         onNodeSelect={setSelectedNodeId}
                         onNodeDragStart={handleNodeDragStartFromCanvas}
+                        onNodeDragMove={(nodeId, clientX, clientY) => {
+                            if (nodeId && deleteZoneRef.current) {
+                                const rect = deleteZoneRef.current.getBoundingClientRect();
+                                const isInDeleteZone =
+                                    clientX >= rect.left &&
+                                    clientX <= rect.right &&
+                                    clientY >= rect.top &&
+                                    clientY <= rect.bottom;
+                                setIsDeleteZoneActive(isInDeleteZone);
+                            }
+                        }}
                         executionState={executionState}
                     />
                     
