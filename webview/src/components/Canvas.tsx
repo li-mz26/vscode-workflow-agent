@@ -38,6 +38,13 @@ export const Canvas: React.FC<CanvasProps> = ({
     const [isPanning, setIsPanning] = useState(false);
     const [panStart, setPanStart] = useState<Position>({ x: 0, y: 0 });
     
+    // 使用 ref 存储拖动状态，避免闭包问题
+    const dragStateRef = useRef<{
+        isDragging: boolean;
+        nodeId: string | null;
+        lastPos: Position;
+    }>({ isDragging: false, nodeId: null, lastPos: { x: 0, y: 0 } });
+    
     const {
         workflow,
         viewport,
@@ -123,19 +130,26 @@ export const Canvas: React.FC<CanvasProps> = ({
     // Handle mouse up
     const handleMouseUp = useCallback(() => {
         setIsPanning(false);
+        // 重置拖动状态
+        dragStateRef.current.isDragging = false;
+        dragStateRef.current.nodeId = null;
         setDraggingNode(null);
     }, [setDraggingNode]);
     
-    // Handle node drag
+    // Handle node drag - 修复：直接使用 store 获取最新位置
     const handleNodeDrag = useCallback((nodeId: string, delta: Position) => {
-        const node = workflow?.nodes.find(n => n.id === nodeId);
+        // 直接从 store 获取最新的 workflow 和节点位置
+        const currentWorkflow = useCanvasStore.getState().workflow;
+        const currentViewport = useCanvasStore.getState().viewport;
+        
+        const node = currentWorkflow?.nodes.find(n => n.id === nodeId);
         if (node) {
             moveNode(nodeId, {
-                x: node.position.x + delta.x / viewport.zoom,
-                y: node.position.y + delta.y / viewport.zoom
+                x: node.position.x + delta.x / currentViewport.zoom,
+                y: node.position.y + delta.y / currentViewport.zoom
             });
         }
-    }, [workflow, viewport.zoom, moveNode]);
+    }, [moveNode]);
     
     // Handle port connection start
     const handlePortMouseDown = useCallback((nodeId: string, portId: string, isOutput: boolean) => {
@@ -166,13 +180,18 @@ export const Canvas: React.FC<CanvasProps> = ({
 
     // Handle node drag start (for delete zone)
     const handleNodeDragStart = useCallback((nodeId: string) => {
+        dragStateRef.current.nodeId = nodeId;
+        dragStateRef.current.isDragging = true;
+        setDraggingNode(nodeId);
         onNodeDragStart?.(nodeId);
-    }, [onNodeDragStart]);
+    }, [onNodeDragStart, setDraggingNode]);
     
     // Global mouse up handler
     useEffect(() => {
         const handleGlobalMouseUp = () => {
             setIsPanning(false);
+            dragStateRef.current.isDragging = false;
+            dragStateRef.current.nodeId = null;
             setDraggingNode(null);
             setConnectingFrom(null);
         };

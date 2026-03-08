@@ -24,11 +24,17 @@ interface WorkflowExecutionState {
     nodeStates: NodeExecutionState[];
 }
 
+// 视图模式
+ type ViewMode = 'visual' | 'json';
+
 function App() {
     const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
     const [executionState, setExecutionState] = useState<WorkflowExecutionState | null>(null);
     const [isDeleteZoneActive, setIsDeleteZoneActive] = useState(false);
     const [draggedNodeId, setDraggedNodeId] = useState<string | null>(null);
+    const [viewMode, setViewMode] = useState<ViewMode>('visual');
+    const [jsonContent, setJsonContent] = useState<string>('');
+    const [jsonError, setJsonError] = useState<string | null>(null);
     const { workflow, setWorkflow, addNode, deleteNode, markClean } = useCanvasStore();
     const deleteZoneRef = useRef<HTMLDivElement>(null);
     
@@ -37,6 +43,7 @@ function App() {
         const initialWorkflow = (window as any).__WORKFLOW_DATA__;
         if (initialWorkflow) {
             setWorkflow(initialWorkflow);
+            setJsonContent(JSON.stringify(initialWorkflow, null, 2));
         }
         
         const handleMessage = (event: MessageEvent) => {
@@ -44,9 +51,11 @@ function App() {
             switch (message.type) {
                 case 'workflow:load':
                     setWorkflow(message.payload);
+                    setJsonContent(JSON.stringify(message.payload, null, 2));
                     break;
                 case 'workflow:update':
                     setWorkflow(message.payload);
+                    setJsonContent(JSON.stringify(message.payload, null, 2));
                     break;
                 case 'execution:state':
                     setExecutionState(message.payload);
@@ -59,7 +68,45 @@ function App() {
         
         return () => window.removeEventListener('message', handleMessage);
     }, [setWorkflow]);
-    
+
+    // 同步 JSON 内容到 workflow
+    useEffect(() => {
+        if (workflow && viewMode === 'visual') {
+            setJsonContent(JSON.stringify(workflow, null, 2));
+            setJsonError(null);
+        }
+    }, [workflow, viewMode]);
+
+    // 处理视图切换
+    const handleViewModeChange = useCallback((mode: ViewMode) => {
+        if (mode === viewMode) return;
+        
+        if (mode === 'json' && workflow) {
+            setJsonContent(JSON.stringify(workflow, null, 2));
+            setJsonError(null);
+        }
+        
+        setViewMode(mode);
+    }, [viewMode, workflow]);
+
+    // 处理 JSON 内容变化
+    const handleJsonChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
+        const newContent = e.target.value;
+        setJsonContent(newContent);
+        
+        try {
+            const parsed = JSON.parse(newContent);
+            setWorkflow(parsed);
+            setJsonError(null);
+            vscode.postMessage({
+                type: 'workflow:update',
+                payload: parsed
+            });
+        } catch (err) {
+            setJsonError((err as Error).message);
+        }
+    }, [setWorkflow]);
+
     // Handle node drag from palette
     const handleNodeDragStart = useCallback((type: string) => {
         (window as any).__draggedNodeType = type;
@@ -170,30 +217,6 @@ function App() {
         }
     }, [workflow]);
 
-    // Handle node drag end - check if dropped on delete zone
-    const handleNodeDragEnd = useCallback(() => {
-        if (draggedNodeId && deleteZoneRef.current) {
-            const deleteZoneRect = deleteZoneRef.current.getBoundingClientRect();
-            // Check if delete zone is visible (has reasonable size and opacity)
-            if (deleteZoneRect.width > 0 && deleteZoneRect.height > 0) {
-                const node = workflow?.nodes.find(n => n.id === draggedNodeId);
-                if (node) {
-                    deleteNode(draggedNodeId);
-                    vscode.postMessage({
-                        type: 'node:delete',
-                        payload: {
-                            workflow,
-                            nodeId: draggedNodeId,
-                            nodeType: node.type
-                        }
-                    });
-                }
-            }
-        }
-        setDraggedNodeId(null);
-        setIsDeleteZoneActive(false);
-    }, [draggedNodeId, workflow, deleteNode]);
-
     // Global mouse up handler to detect delete zone drop
     useEffect(() => {
         const handleGlobalMouseUp = (e: MouseEvent) => {
@@ -245,14 +268,76 @@ function App() {
                 canSave={useCanvasStore(state => state.isDirty)}
             />
             
+            {/* 视图切换按钮 */}
+            <div style={{
+                display: 'flex',
+                padding: '8px 16px',
+                borderBottom: '1px solid var(--vscode-panel-border)',
+                background: 'var(--vscode-editor-background)',
+                gap: '8px'
+            }}>
+                <button
+                    onClick={() => handleViewModeChange('visual')}
+                    style={{
+                        padding: '6px 16px',
+                        border: 'none',
+                        borderRadius: '4px',
+                        cursor: 'pointer',
+                        background: viewMode === 'visual' 
+                            ? 'var(--vscode-button-background)' 
+                            : 'var(--vscode-button-secondaryBackground)',
+                        color: viewMode === 'visual'
+                            ? 'var(--vscode-button-foreground)'
+                            : 'var(--vscode-button-secondaryForeground)',
+                        fontSize: '13px',
+                        fontWeight: 500
+                    }}
+                >
+                    可视化
+                </button>
+                <button
+                    onClick={() => handleViewModeChange('json')}
+                    style={{
+                        padding: '6px 16px',
+                        border: 'none',
+                        borderRadius: '4px',
+                        cursor: 'pointer',
+                        background: viewMode === 'json' 
+                            ? 'var(--vscode-button-background)' 
+                            : 'var(--vscode-button-secondaryBackground)',
+                        color: viewMode === 'json'
+                            ? 'var(--vscode-button-foreground)'
+                            : 'var(--vscode-button-secondaryForeground)',
+                        fontSize: '13px',
+                        fontWeight: 500
+                    }}
+                >
+                    JSON 文本
+                </button>
+                {jsonError && (
+                    <span style={{
+                        color: 'var(--vscode-errorForeground)',
+                        fontSize: '12px',
+                        marginLeft: 'auto',
+                        display: 'flex',
+                        alignItems: 'center'
+                    }}>
+                        ⚠️ JSON 格式错误
+                    </span>
+                )}
+            </div>
+            
             <div style={{
                 display: 'flex',
                 flex: 1,
                 overflow: 'hidden'
             }}>
-                <div style={{ width: '200px', flexShrink: 0 }}>
-                    <NodePalette onNodeDragStart={handleNodeDragStart} />
-                </div>
+                {/* 只在可视化模式显示左侧面板 */}
+                {viewMode === 'visual' && (
+                    <div style={{ width: '200px', flexShrink: 0 }}>
+                        <NodePalette onNodeDragStart={handleNodeDragStart} />
+                    </div>
+                )}
                 
                 <div 
                     style={{ 
@@ -263,90 +348,118 @@ function App() {
                     onDragOver={(e) => e.preventDefault()}
                     onDrop={handleCanvasDrop}
                 >
-                    <Canvas
-                        onNodeSelect={setSelectedNodeId}
-                        onNodeDragStart={handleNodeDragStartFromCanvas}
-                        onNodeDragMove={(nodeId, clientX, clientY) => {
-                            if (nodeId && deleteZoneRef.current) {
-                                const rect = deleteZoneRef.current.getBoundingClientRect();
-                                const isInDeleteZone =
-                                    clientX >= rect.left &&
-                                    clientX <= rect.right &&
-                                    clientY >= rect.top &&
-                                    clientY <= rect.bottom;
-                                setIsDeleteZoneActive(isInDeleteZone);
-                            }
-                        }}
-                        executionState={executionState}
-                    />
-                    
-                    {/* 删除区域 */}
-                    <div
-                        ref={deleteZoneRef}
-                        style={{
-                            position: 'absolute',
-                            bottom: '20px',
-                            left: '50%',
-                            transform: 'translateX(-50%)',
-                            width: '120px',
-                            height: '60px',
-                            background: isDeleteZoneActive 
-                                ? 'var(--vscode-inputValidation-errorBackground)' 
-                                : 'var(--vscode-editorWidget-background)',
-                            border: `2px dashed ${isDeleteZoneActive 
-                                ? 'var(--vscode-inputValidation-errorBorder)' 
-                                : 'var(--vscode-editorWidget-border)'}`,
-                            borderRadius: '8px',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            transition: 'all 0.2s ease',
-                            opacity: draggedNodeId ? 1 : 0.3,
-                            pointerEvents: draggedNodeId ? 'auto' : 'none',
-                            zIndex: 1000
-                        }}
-                        onDragOver={handleDeleteZoneDragOver}
-                        onDragLeave={handleDeleteZoneDragLeave}
-                        onDrop={handleDeleteZoneDrop}
-                    >
-                        <span style={{
-                            fontSize: '24px',
-                            color: isDeleteZoneActive 
-                                ? 'var(--vscode-inputValidation-errorForeground)' 
-                                : 'var(--vscode-foreground)'
-                        }}>
-                            🗑️
-                        </span>
-                        <span style={{
-                            marginLeft: '8px',
-                            fontSize: '12px',
-                            color: isDeleteZoneActive 
-                                ? 'var(--vscode-inputValidation-errorForeground)' 
-                                : 'var(--vscode-foreground)'
-                        }}>
-                            删除节点
-                        </span>
-                    </div>
+                    {viewMode === 'visual' ? (
+                        <>
+                            <Canvas
+                                onNodeSelect={setSelectedNodeId}
+                                onNodeDragStart={handleNodeDragStartFromCanvas}
+                                onNodeDragMove={(nodeId, clientX, clientY) => {
+                                    if (nodeId && deleteZoneRef.current) {
+                                        const rect = deleteZoneRef.current.getBoundingClientRect();
+                                        const isInDeleteZone =
+                                            clientX >= rect.left &&
+                                            clientX <= rect.right &&
+                                            clientY >= rect.top &&
+                                            clientY <= rect.bottom;
+                                        setIsDeleteZoneActive(isInDeleteZone);
+                                    }
+                                }}
+                                executionState={executionState}
+                            />
+                            
+                            {/* 删除区域 */}
+                            <div
+                                ref={deleteZoneRef}
+                                style={{
+                                    position: 'absolute',
+                                    bottom: '20px',
+                                    left: '50%',
+                                    transform: 'translateX(-50%)',
+                                    width: '120px',
+                                    height: '60px',
+                                    background: isDeleteZoneActive 
+                                        ? 'var(--vscode-inputValidation-errorBackground)' 
+                                        : 'var(--vscode-editorWidget-background)',
+                                    border: `2px dashed ${isDeleteZoneActive 
+                                        ? 'var(--vscode-inputValidation-errorBorder)' 
+                                        : 'var(--vscode-editorWidget-border)'}`,
+                                    borderRadius: '8px',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    transition: 'all 0.2s ease',
+                                    opacity: draggedNodeId ? 1 : 0.3,
+                                    pointerEvents: draggedNodeId ? 'auto' : 'none',
+                                    zIndex: 1000
+                                }}
+                                onDragOver={handleDeleteZoneDragOver}
+                                onDragLeave={handleDeleteZoneDragLeave}
+                                onDrop={handleDeleteZoneDrop}
+                            >
+                                <span style={{
+                                    fontSize: '24px',
+                                    color: isDeleteZoneActive 
+                                        ? 'var(--vscode-inputValidation-errorForeground)' 
+                                        : 'var(--vscode-foreground)'
+                                }}>
+                                    🗑️
+                                </span>
+                                <span style={{
+                                    marginLeft: '8px',
+                                    fontSize: '12px',
+                                    color: isDeleteZoneActive 
+                                        ? 'var(--vscode-inputValidation-errorForeground)' 
+                                        : 'var(--vscode-foreground)'
+                                }}>
+                                    删除节点
+                                </span>
+                            </div>
+                        </>
+                    ) : (
+                        /* JSON 文本编辑器 */
+                        <textarea
+                            value={jsonContent}
+                            onChange={handleJsonChange}
+                            style={{
+                                width: '100%',
+                                height: '100%',
+                                border: 'none',
+                                outline: 'none',
+                                padding: '16px',
+                                fontFamily: 'var(--vscode-editor-font-family), monospace',
+                                fontSize: 'var(--vscode-editor-font-size)',
+                                lineHeight: '1.5',
+                                background: 'var(--vscode-editor-background)',
+                                color: 'var(--vscode-editor-foreground)',
+                                resize: 'none',
+                                tabSize: 2
+                            }}
+                            spellCheck={false}
+                        />
+                    )}
                 </div>
                 
-                <div style={{ width: '280px', flexShrink: 0 }}>
-                    <PropertiesPanel 
-                        selectedNodeId={selectedNodeId}
-                        onOpenConfig={(nodeId) => {
-                            const node = workflow?.nodes.find(n => n.id === nodeId);
-                            if (node) {
-                                vscode.postMessage({
-                                    type: 'node:openConfig',
-                                    payload: { node }
-                                });
-                            }
-                        }}
-                    />
-                </div>
+                {/* 只在可视化模式显示右侧面板 */}
+                {viewMode === 'visual' && (
+                    <div style={{ width: '280px', flexShrink: 0 }}>
+                        <PropertiesPanel 
+                            selectedNodeId={selectedNodeId}
+                            onOpenConfig={(nodeId) => {
+                                const node = workflow?.nodes.find(n => n.id === nodeId);
+                                if (node) {
+                                    vscode.postMessage({
+                                        type: 'node:openConfig',
+                                        payload: { node }
+                                    });
+                                }
+                            }}
+                        />
+                    </div>
+                )}
             </div>
             
             {/* 执行状态栏 */}
-            {executionState && executionState.status !== 'idle' && (
+            {executionState && executionState.status !== 'idle' && viewMode === 'visual' && (
                 <div style={{
                     height: '30px',
                     background: executionState.status === 'running' 

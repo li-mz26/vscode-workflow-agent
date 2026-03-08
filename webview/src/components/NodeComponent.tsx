@@ -30,9 +30,16 @@ export const NodeComponent: React.FC<NodeComponentProps> = ({
     onPortMouseUp
 }) => {
     const [isDragging, setIsDragging] = useState(false);
-    const [dragStart, setDragStart] = useState<Position>({ x: 0, y: 0 });
-    const dragStarted = useRef(false);
-    const isDraggingRef = useRef(false);
+    
+    // 使用 ref 存储拖动状态，避免闭包问题
+    const dragStateRef = useRef({
+        isActive: false,
+        startX: 0,
+        startY: 0,
+        lastX: 0,
+        lastY: 0,
+        dragStarted: false
+    });
     
     const color = node.metadata?.color || '#666';
     const title = node.metadata?.name || node.type;
@@ -69,86 +76,70 @@ export const NodeComponent: React.FC<NodeComponentProps> = ({
     
     const handleMouseDown = useCallback((e: React.MouseEvent) => {
         if (e.button === 0) {
+            // 初始化拖动状态
+            dragStateRef.current.isActive = true;
+            dragStateRef.current.startX = e.clientX;
+            dragStateRef.current.startY = e.clientY;
+            dragStateRef.current.lastX = e.clientX;
+            dragStateRef.current.lastY = e.clientY;
+            dragStateRef.current.dragStarted = false;
+            
             setIsDragging(true);
-            isDraggingRef.current = true;
-            dragStarted.current = false;
-            setDragStart({ x: e.clientX, y: e.clientY });
             onClick(node.id, e.metaKey || e.ctrlKey);
             e.stopPropagation();
         }
     }, [node.id, onClick]);
     
     // 全局鼠标移动事件处理（用于拖动时不被区域外打断）
-    const globalHandleMouseMove = useCallback((e: globalThis.MouseEvent) => {
-        if (isDraggingRef.current) {
-            const delta = {
-                x: e.clientX - dragStart.x,
-                y: e.clientY - dragStart.y
-            };
+    const handleGlobalMouseMove = useCallback((e: globalThis.MouseEvent) => {
+        if (!dragStateRef.current.isActive) return;
 
-            // 首次移动时触发 dragStart
-            if (!dragStarted.current && (Math.abs(delta.x) > 3 || Math.abs(delta.y) > 3)) {
-                dragStarted.current = true;
+        // 计算增量（相对于上一次位置）
+        const deltaX = e.clientX - dragStateRef.current.lastX;
+        const deltaY = e.clientY - dragStateRef.current.lastY;
+
+        // 首次移动时触发 dragStart
+        if (!dragStateRef.current.dragStarted) {
+            const totalDeltaX = Math.abs(e.clientX - dragStateRef.current.startX);
+            const totalDeltaY = Math.abs(e.clientY - dragStateRef.current.startY);
+            
+            if (totalDeltaX > 3 || totalDeltaY > 3) {
+                dragStateRef.current.dragStarted = true;
                 onDragStart?.(node.id);
             }
+        }
 
+        // 如果已经开始拖动，通知更新
+        if (dragStateRef.current.dragStarted) {
             // 拖动过程中通知父组件鼠标位置
             onDragMove?.(node.id, e.clientX, e.clientY);
 
-            onDrag(node.id, delta);
-            setDragStart({ x: e.clientX, y: e.clientY });
+            onDrag(node.id, { x: deltaX, y: deltaY });
+            
+            // 更新上一次位置
+            dragStateRef.current.lastX = e.clientX;
+            dragStateRef.current.lastY = e.clientY;
         }
-    }, [dragStart, node.id, onDrag, onDragStart, onDragMove]);
+    }, [node.id, onDrag, onDragStart, onDragMove]);
 
-    const globalHandleMouseUp = useCallback(() => {
-        isDraggingRef.current = false;
+    const handleGlobalMouseUp = useCallback(() => {
+        dragStateRef.current.isActive = false;
+        dragStateRef.current.dragStarted = false;
         setIsDragging(false);
-        dragStarted.current = false;
     }, []);
 
     // 使用全局事件监听，确保拖动时不丢失控制
     useEffect(() => {
         if (isDragging) {
-            window.addEventListener('mousemove', globalHandleMouseMove);
-            window.addEventListener('mouseup', globalHandleMouseUp);
+            window.addEventListener('mousemove', handleGlobalMouseMove);
+            window.addEventListener('mouseup', handleGlobalMouseUp);
 
             return () => {
-                window.removeEventListener('mousemove', globalHandleMouseMove);
-                window.removeEventListener('mouseup', globalHandleMouseUp);
+                window.removeEventListener('mousemove', handleGlobalMouseMove);
+                window.removeEventListener('mouseup', handleGlobalMouseUp);
             };
         }
-    }, [isDragging, globalHandleMouseMove, globalHandleMouseUp]);
-
-    // React 事件处理器（用于 JSX 绑定）
-    const handleMouseMove = useCallback((e: React.MouseEvent) => {
-        if (isDraggingRef.current) {
-            e.stopPropagation();
-            e.preventDefault();
-
-            const delta = {
-                x: e.clientX - dragStart.x,
-                y: e.clientY - dragStart.y
-            };
-
-            // 首次移动时触发 dragStart
-            if (!dragStarted.current && (Math.abs(delta.x) > 3 || Math.abs(delta.y) > 3)) {
-                dragStarted.current = true;
-                onDragStart?.(node.id);
-            }
-
-            // 拖动过程中通知父组件鼠标位置
-            onDragMove?.(node.id, e.clientX, e.clientY);
-
-            onDrag(node.id, delta);
-            setDragStart({ x: e.clientX, y: e.clientY });
-        }
-    }, [dragStart, node.id, onDrag, onDragStart, onDragMove]);
-
-    const handleMouseUp = useCallback(() => {
-        isDraggingRef.current = false;
-        setIsDragging(false);
-        dragStarted.current = false;
-    }, []);
+    }, [isDragging, handleGlobalMouseMove, handleGlobalMouseUp]);
 
     const executionBorderColor = getExecutionBorderColor();
     
@@ -157,9 +148,6 @@ export const NodeComponent: React.FC<NodeComponentProps> = ({
             transform={`translate(${node.position.x}, ${node.position.y})`}
             style={{ cursor: isDragging ? 'grabbing' : 'grab' }}
             onMouseDown={handleMouseDown}
-            onMouseMove={handleMouseMove}
-            onMouseUp={handleMouseUp}
-            onMouseLeave={handleMouseUp}
         >
             {/* Shadow */}
             <rect
