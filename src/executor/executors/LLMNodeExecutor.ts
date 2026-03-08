@@ -21,8 +21,8 @@ export class LLMNodeExecutor extends NodeExecutorBase {
 
         try {
             // 渲染模板
-            const prompt = this.renderTemplate(promptTemplate, inputs, context);
-            const system = systemTemplate ? this.renderTemplate(systemTemplate, inputs, context) : undefined;
+            const prompt = this.renderTemplateWithInputs(promptTemplate, inputs, context);
+            const system = systemTemplate ? this.renderTemplateWithInputs(systemTemplate, inputs, context) : undefined;
 
             // TODO: 调用实际的 LLM API
             // 临时返回模拟结果
@@ -43,7 +43,7 @@ export class LLMNodeExecutor extends NodeExecutorBase {
         }
     }
 
-    private renderTemplate(
+    private renderTemplateWithInputs(
         template: string, 
         inputs: Record<string, any>, 
         context: ExecutionContext

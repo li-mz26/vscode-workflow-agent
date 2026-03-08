@@ -2,7 +2,7 @@
 // Executor 层 - Start 节点执行器
 // ============================================
 
-import { NodeConfig, ExecutionContext, NodeExecutionResult, ValidationResult } from '../domain';
+import { NodeConfig, ExecutionContext, NodeExecutionResult, ValidationResult } from '../../domain';
 import { NodeExecutorBase } from '../NodeExecutorBase';
 
 export class StartNodeExecutor extends NodeExecutorBase {

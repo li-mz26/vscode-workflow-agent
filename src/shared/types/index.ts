@@ -82,6 +82,11 @@ export interface WorkflowSettings {
     timeout: number;
     retryPolicy?: RetryPolicy;
     logLevel: 'debug' | 'info' | 'warn' | 'error';
+    schedule?: {
+        cron: string;
+        timezone: string;
+        enabled: boolean;
+    };
 }
 
 export interface RetryPolicy {

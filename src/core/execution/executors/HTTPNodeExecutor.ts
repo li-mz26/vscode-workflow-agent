@@ -1,5 +1,5 @@
-import { NodeConfig, ExecutionContext, NodeExecutionResult, ValidationResult } from '../../shared/types';
-import { NodeExecutor } from './NodeExecutor';
+import { NodeConfig, ExecutionContext, NodeExecutionResult, ValidationResult } from '../../../shared/types/index';
+import { NodeExecutor } from './NodeExecutorFactory';
 
 export class HTTPNodeExecutor extends NodeExecutor {
     type = 'http';

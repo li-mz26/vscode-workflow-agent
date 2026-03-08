@@ -4,7 +4,7 @@ interface SettingItem {
     id: string;
     label: string;
     description?: string;
-    value: any;
+    value?: any;
     type: 'boolean' | 'number' | 'string' | 'action';
     configKey?: string;
     icon?: string;
@@ -36,7 +36,7 @@ export class SettingsProvider implements vscode.TreeDataProvider<SettingTreeItem
         }
         
         if (element.children) {
-            return Promise.resolve(element.children.map(child => this.createTreeItem(child)));
+            return Promise.resolve(element.children);
         }
         
         return Promise.resolve([]);
@@ -255,6 +255,8 @@ export class SettingsProvider implements vscode.TreeDataProvider<SettingTreeItem
 
 export class SettingTreeItem extends vscode.TreeItem {
     children?: SettingTreeItem[];
+    type?: 'boolean' | 'number' | 'string' | 'action';
+    id?: string;
     
     constructor(
         public readonly label: string,
@@ -262,6 +264,8 @@ export class SettingTreeItem extends vscode.TreeItem {
         public readonly setting: SettingItem
     ) {
         super(label, collapsibleState);
+        this.id = setting.id;
+        this.type = setting.type;
         this.children = setting.children?.map(child => {
             const item = new SettingTreeItem(child.label, vscode.TreeItemCollapsibleState.None, child);
             item.description = child.description;

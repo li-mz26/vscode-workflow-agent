@@ -3,7 +3,7 @@ import {
     ExecutionContext, 
     NodeExecutionResult,
     ValidationResult 
-} from '../../shared/types';
+} from '../../../shared/types/index';
 
 // 节点执行器抽象基类
 export abstract class NodeExecutor {
