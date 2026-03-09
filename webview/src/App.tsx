@@ -45,6 +45,10 @@ function App() {
     const deleteZoneRef = useRef<HTMLDivElement>(null);
 
     const getCurrentWorkflow = useCallback(() => useCanvasStore.getState().workflow, []);
+    const getNodeTypeById = useCallback((nodeId: string) => {
+        const currentWorkflow = getCurrentWorkflow();
+        return currentWorkflow?.nodes.find(n => n.id === nodeId)?.type;
+    }, [getCurrentWorkflow]);
     
     // Load workflow from VSCode
     useEffect(() => {
@@ -144,9 +148,9 @@ function App() {
     // Handle drop on delete zone
     const handleDeleteZoneDrop = useCallback((e: React.DragEvent) => {
         e.preventDefault();
-        if (draggedNodeId && workflow) {
-            const node = workflow.nodes.find(n => n.id === draggedNodeId);
-            if (node) {
+        if (draggedNodeId) {
+            const nodeType = getNodeTypeById(draggedNodeId);
+            if (nodeType) {
                 deleteNode(draggedNodeId);
                 const nextWorkflow = getCurrentWorkflow();
                 if (nextWorkflow) {
@@ -155,7 +159,7 @@ function App() {
                         payload: { 
                             workflow: nextWorkflow,
                             nodeId: draggedNodeId,
-                            nodeType: node.type
+                            nodeType
                         }
                     });
                 }
@@ -164,21 +168,22 @@ function App() {
         setIsDeleteZoneActive(false);
         setDraggedNodeId(null);
         delete (window as any).__isNewNode;
-    }, [draggedNodeId, workflow, deleteNode, getCurrentWorkflow]);
+    }, [draggedNodeId, deleteNode, getCurrentWorkflow, getNodeTypeById]);
     
     // Handle drop on canvas
     const handleCanvasDrop = useCallback((e: React.DragEvent) => {
         e.preventDefault();
-        const type = (window as any).__draggedNodeType;
+        const typeFromDataTransfer = e.dataTransfer.getData('application/x-workflow-node-type');
+        const type = typeFromDataTransfer || (window as any).__draggedNodeType;
         const isNewNode = (window as any).__isNewNode;
-        
-        // 如果是从画布拖拽的节点，不做处理（已由 delete zone 处理）
-        if (!isNewNode) {
+
+        // 兼容旧逻辑：画布内节点拖拽不在此处处理
+        if (!type && isNewNode === false) {
             setDraggedNodeId(null);
             delete (window as any).__isNewNode;
             return;
         }
-        
+
         if (!type) return;
         
         const rect = e.currentTarget.getBoundingClientRect();
@@ -243,8 +248,8 @@ function App() {
                     e.clientY <= deleteZoneRect.bottom;
 
                 if (isInDeleteZone) {
-                    const node = workflow?.nodes.find(n => n.id === draggedNodeId);
-                    if (node) {
+                    const nodeType = getNodeTypeById(draggedNodeId);
+                    if (nodeType) {
                         deleteNode(draggedNodeId);
                         const nextWorkflow = getCurrentWorkflow();
                         if (nextWorkflow) {
@@ -253,7 +258,7 @@ function App() {
                                 payload: {
                                     workflow: nextWorkflow,
                                     nodeId: draggedNodeId,
-                                    nodeType: node.type
+                                    nodeType
                                 }
                             });
                         }
@@ -266,7 +271,7 @@ function App() {
 
         window.addEventListener('mouseup', handleGlobalMouseUp);
         return () => window.removeEventListener('mouseup', handleGlobalMouseUp);
-    }, [draggedNodeId, workflow, deleteNode, getCurrentWorkflow]);
+    }, [draggedNodeId, deleteNode, getCurrentWorkflow, getNodeTypeById]);
 
 
     const canUndo = useCanvasStore(state => state.history.canUndo);
@@ -423,9 +428,9 @@ function App() {
                                             clientY >= rect.top &&
                                             clientY <= rect.bottom;
                                         
-                                        if (isInDeleteZone && workflow) {
-                                            const node = workflow.nodes.find(n => n.id === nodeId);
-                                            if (node) {
+                                        if (isInDeleteZone) {
+                                            const nodeType = getNodeTypeById(nodeId);
+                                            if (nodeType) {
                                                 deleteNode(nodeId);
                                                 const nextWorkflow = getCurrentWorkflow();
                                                 if (nextWorkflow) {
@@ -434,7 +439,7 @@ function App() {
                                                         payload: {
                                                             workflow: nextWorkflow,
                                                             nodeId,
-                                                            nodeType: node.type
+                                                            nodeType
                                                         }
                                                     });
                                                 }
