@@ -440,9 +440,37 @@ function App() {
                                     }
                                 }}
                                 onNodeDragEnd={(nodeId, clientX, clientY) => {
-                                    // 删除逻辑统一由删除区域的 onDrop 处理
-                                    // 这里只清理状态
                                     console.log('[App] onNodeDragEnd, nodeId:', nodeId, 'clientX:', clientX, 'clientY:', clientY);
+                                    
+                                    // 检测是否在删除区域内
+                                    if (deleteZoneRef.current) {
+                                        const rect = deleteZoneRef.current.getBoundingClientRect();
+                                        const isInDeleteZone =
+                                            clientX >= rect.left &&
+                                            clientX <= rect.right &&
+                                            clientY >= rect.top &&
+                                            clientY <= rect.bottom;
+                                        
+                                        console.log('[App] Delete zone rect:', rect, 'isInDeleteZone:', isInDeleteZone);
+                                        
+                                        if (isInDeleteZone && workflow) {
+                                            const node = workflow.nodes.find(n => n.id === nodeId);
+                                            console.log('[App] Found node for deletion:', node?.id);
+                                            if (node) {
+                                                console.log('[App] Deleting node:', nodeId);
+                                                deleteNode(nodeId);
+                                                vscode.postMessage({
+                                                    type: 'node:delete',
+                                                    payload: {
+                                                        workflow,
+                                                        nodeId,
+                                                        nodeType: node.type
+                                                    }
+                                                });
+                                            }
+                                        }
+                                    }
+                                    
                                     setIsDeleteZoneActive(false);
                                     setDraggedNodeId(null);
                                     delete (window as any).__isNewNode;
