@@ -41,7 +41,7 @@ function App() {
     const [viewMode, setViewMode] = useState<ViewMode>('visual');
     const [jsonContent, setJsonContent] = useState<string>('');
     const [jsonError, setJsonError] = useState<string | null>(null);
-    const { workflow, setWorkflow, addNode, deleteNode, markClean } = useCanvasStore();
+    const { workflow, setWorkflow, addNode, deleteNode, markClean, undo, redo } = useCanvasStore();
     const deleteZoneRef = useRef<HTMLDivElement>(null);
 
     const getCurrentWorkflow = useCallback(() => useCanvasStore.getState().workflow, []);
@@ -268,6 +268,35 @@ function App() {
         return () => window.removeEventListener('mouseup', handleGlobalMouseUp);
     }, [draggedNodeId, workflow, deleteNode, getCurrentWorkflow]);
 
+
+    const canUndo = useCanvasStore(state => state.history.canUndo);
+    const canRedo = useCanvasStore(state => state.history.canRedo);
+
+    useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            const isModifierPressed = e.ctrlKey || e.metaKey;
+            if (!isModifierPressed) return;
+
+            if (e.key.toLowerCase() === 'z' && !e.shiftKey) {
+                e.preventDefault();
+                undo();
+                return;
+            }
+
+            const isRedo =
+                (e.key.toLowerCase() === 'y') ||
+                (e.key.toLowerCase() === 'z' && e.shiftKey);
+
+            if (isRedo) {
+                e.preventDefault();
+                redo();
+            }
+        };
+
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [undo, redo]);
+
     return (
         <div style={{
             display: 'flex',
@@ -283,6 +312,10 @@ function App() {
                 onDebug={handleDebug}
                 isRunning={executionState?.status === 'running'}
                 canSave={useCanvasStore(state => state.isDirty)}
+                canUndo={canUndo}
+                canRedo={canRedo}
+                onUndo={undo}
+                onRedo={redo}
             />
             
             {/* 视图切换按钮 */}
