@@ -37,6 +37,8 @@ export interface NodeConfig {
         icon?: string;
         color?: string;
     };
+    // 外部配置文件引用（可选）
+    configRef?: string;
 }
 
 // 边（连接）定义

@@ -237,14 +237,17 @@ export class ExecutionEngine extends EventEmitter {
         this.log('info', `Executing node: ${node.metadata?.name || node.type}`, node.id);
 
         try {
+            // 加载外部配置（如果存在 configRef）
+            const resolvedNode = await this.loadNodeConfig(node);
+            
             // 收集输入
-            const inputs = this.collectNodeInputs(node);
+            const inputs = this.collectNodeInputs(resolvedNode);
             
             // 获取执行器
-            const executor = NodeExecutorFactory.create(node.type);
+            const executor = NodeExecutorFactory.create(resolvedNode.type);
             
             // 执行
-            const result = await executor.execute(node, {
+            const result = await executor.execute(resolvedNode, {
                 ...this.context,
                 inputs
             });
