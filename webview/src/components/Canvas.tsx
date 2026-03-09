@@ -56,6 +56,7 @@ export const Canvas: React.FC<CanvasProps> = ({
         pan,
         selectNode,
         deselectAll,
+        beginNodeMove,
         setDraggingNode,
         setConnectingFrom,
         setMousePosition,
@@ -177,11 +178,12 @@ export const Canvas: React.FC<CanvasProps> = ({
 
     // Handle node drag start
     const handleNodeDragStart = useCallback((nodeId: string) => {
+        beginNodeMove();
         dragStateRef.current.nodeId = nodeId;
         dragStateRef.current.isDragging = true;
         setDraggingNode(nodeId);
         onNodeDragStart?.(nodeId);
-    }, [onNodeDragStart, setDraggingNode]);
+    }, [onNodeDragStart, setDraggingNode, beginNodeMove]);
     
     // Handle node drag end
     const handleNodeDragEnd = useCallback((nodeId: string, clientX: number, clientY: number) => {

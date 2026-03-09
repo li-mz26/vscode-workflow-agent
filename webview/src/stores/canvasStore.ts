@@ -121,6 +121,7 @@ interface CanvasState {
     updateWorkflow: (updates: Partial<WorkflowData>) => void;
     updateNode: (nodeId: string, updates: Partial<NodeData>) => void;
     updateNodeData: (nodeId: string, data: Record<string, any>) => void;
+    beginNodeMove: () => void;
     moveNode: (nodeId: string, position: Position) => void;
     addNode: (node: NodeData) => void;
     deleteNode: (nodeId: string) => void;
@@ -182,11 +183,16 @@ export const useCanvasStore = create<CanvasState>()(
                 state.isDirty = true;
             }
         }),
+
+        beginNodeMove: () => set((state) => {
+            if (state.workflow) {
+                pushHistorySnapshot(state.history, state.workflow);
+            }
+        }),
         
         moveNode: (nodeId, position) => set((state) => {
             const node = state.workflow?.nodes.find((n) => n.id === nodeId);
             if (node && state.workflow) {
-                pushHistorySnapshot(state.history, state.workflow);
                 node.position = position;
                 state.isDirty = true;
             }
