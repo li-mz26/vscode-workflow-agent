@@ -1,0 +1,9 @@
+{
+  "$schema": "https://workflow-agent/config/code-node.json",
+  "type": "code",
+  "timeout": 30,
+  "environment": {
+    "PYTHONIOENCODING": "utf-8"
+  },
+  "code": "def main(ctx):\n    # 示例文本，实际可以从输入获取\n    text = ctx.get('input', {}).get('text', '''\n    这款产品真的太棒了！完全符合我的期望。\n    虽然价格有点贵，但是质量真的很好，值得。\n    客服态度也非常好，有问必答。\n    ''').strip()\n    \n    _result = {'text': text, 'source': 'user_input'}\n    return _result"
+}

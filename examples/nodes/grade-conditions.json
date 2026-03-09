@@ -1,0 +1,20 @@
+{
+  "$schema": "https://workflow-agent/config/switch-node.json",
+  "type": "switch",
+  "conditions": [
+    {
+      "name": "优秀 (≥90)",
+      "expression": "input.score >= 90",
+      "target": "excellent",
+      "description": "成绩大于等于90分为优秀"
+    },
+    {
+      "name": "良好 (≥60)",
+      "expression": "input.score >= 60",
+      "target": "good",
+      "description": "成绩大于等于60分为良好"
+    }
+  ],
+  "defaultTarget": "fail",
+  "defaultDescription": "成绩低于60分为不及格"
+}

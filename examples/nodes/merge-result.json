@@ -1,0 +1,6 @@
+{
+  "$schema": "https://workflow-agent/config/code-node.json",
+  "type": "code",
+  "timeout": 30,
+  "code": "def main(ctx):\n    _result = ctx.get('input', {})\n    return _result"
+}

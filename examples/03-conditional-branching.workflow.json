@@ -1,8 +1,8 @@
 {
   "id": "wf_conditional_branching",
   "name": "条件分支示例",
-  "description": "根据条件选择不同的处理路径",
-  "version": "1.0.0",
+  "description": "根据条件选择不同的处理路径 - 配置文件分离示例",
+  "version": "2.0.0",
   "nodes": [
     {
       "id": "node_start",
@@ -14,9 +14,7 @@
       ],
       "metadata": {
         "name": "开始",
-        "description": "工作流入口",
-        "icon": "play",
-        "color": "#4CAF50"
+        "description": "工作流入口"
       },
       "data": { "triggerType": "manual" }
     },
@@ -32,14 +30,9 @@
       ],
       "metadata": {
         "name": "准备数据",
-        "description": "生成示例数据",
-        "icon": "code",
-        "color": "#2196F3"
+        "description": "生成示例数据"
       },
-      "data": {
-        "code": "def main(ctx):\n    import random\n    score = random.randint(0, 100)\n    return {'score': score, 'student': '张三'}",
-        "timeout": 30
-      }
+      "configRef": "nodes/generate-score.json"
     },
     {
       "id": "node_switch",
@@ -55,17 +48,9 @@
       ],
       "metadata": {
         "name": "成绩判断",
-        "description": "根据分数判断等级",
-        "icon": "split-horizontal",
-        "color": "#FF9800"
+        "description": "根据分数判断等级"
       },
-      "data": {
-        "conditions": [
-          { "name": "优秀 (≥90)", "expression": "input.score >= 90", "target": "excellent" },
-          { "name": "良好 (≥60)", "expression": "input.score >= 60", "target": "good" }
-        ],
-        "defaultTarget": "fail"
-      }
+      "configRef": "nodes/grade-switch.json"
     },
     {
       "id": "node_excellent",
@@ -79,15 +64,9 @@
       ],
       "metadata": {
         "name": "优秀处理",
-        "description": "优秀成绩处理",
-        "icon": "code",
-        "color": "#4CAF50"
+        "description": "优秀成绩处理"
       },
-      "data": {
-        "code": "def main(ctx):\n    data = ctx.get('input', {})\n    return {\n        'grade': 'A',\n        'message': f\"恭喜 {data.get('student')}！成绩优秀 ({data.get('score')}分)\",\n        'reward': '获得奖学金'
-    }",
-        "timeout": 30
-      }
+      "configRef": "nodes/handle-excellent.json"
     },
     {
       "id": "node_good",
@@ -101,15 +80,9 @@
       ],
       "metadata": {
         "name": "良好处理",
-        "description": "良好成绩处理",
-        "icon": "code",
-        "color": "#2196F3"
+        "description": "良好成绩处理"
       },
-      "data": {
-        "code": "def main(ctx):\n    data = ctx.get('input', {})\n    return {\n        'grade': 'B',\n        'message': f\"{data.get('student')} 成绩良好 ({data.get('score')}分)\",\n        'reward': '继续保持'
-    }",
-        "timeout": 30
-      }
+      "configRef": "nodes/handle-good.json"
     },
     {
       "id": "node_fail",
@@ -123,15 +96,9 @@
       ],
       "metadata": {
         "name": "不及格处理",
-        "description": "不及格成绩处理",
-        "icon": "code",
-        "color": "#F44336"
+        "description": "不及格成绩处理"
       },
-      "data": {
-        "code": "def main(ctx):\n    data = ctx.get('input', {})\n    return {\n        'grade': 'F',\n        'message': f\"{data.get('student')} 需要补考 ({data.get('score')}分)\",\n        'reward': '请加强学习'
-    }",
-        "timeout": 30
-      }
+      "configRef": "nodes/handle-fail.json"
     },
     {
       "id": "node_merge",
@@ -145,14 +112,9 @@
       ],
       "metadata": {
         "name": "合并结果",
-        "description": "汇总处理结果",
-        "icon": "code",
-        "color": "#9C27B0"
+        "description": "汇总处理结果"
       },
-      "data": {
-        "code": "def main(ctx):\n    return ctx.get('input', {})",
-        "timeout": 30
-      }
+      "configRef": "nodes/merge-result.json"
     },
     {
       "id": "node_end",
@@ -164,9 +126,7 @@
       "outputs": [],
       "metadata": {
         "name": "结束",
-        "description": "工作流出口",
-        "icon": "stop",
-        "color": "#F44336"
+        "description": "工作流出口"
       },
       "data": { "outputMapping": {} }
     }

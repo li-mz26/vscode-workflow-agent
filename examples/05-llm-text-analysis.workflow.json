@@ -1,8 +1,8 @@
 {
   "id": "wf_llm_text_analysis",
   "name": "LLM 文本分析",
-  "description": "使用大语言模型分析文本情感和内容",
-  "version": "1.0.0",
+  "description": "使用大语言模型分析文本情感和内容 - 配置文件分离示例",
+  "version": "2.0.0",
   "nodes": [
     {
       "id": "node_start",
@@ -14,9 +14,7 @@
       ],
       "metadata": {
         "name": "开始",
-        "description": "工作流入口",
-        "icon": "play",
-        "color": "#4CAF50"
+        "description": "工作流入口"
       },
       "data": { "triggerType": "manual" }
     },
@@ -32,14 +30,9 @@
       ],
       "metadata": {
         "name": "准备文本",
-        "description": "准备待分析的文本",
-        "icon": "code",
-        "color": "#2196F3"
+        "description": "准备待分析的文本"
       },
-      "data": {
-        "code": "def main(ctx):\n    # 示例文本，实际可以从输入获取\n    text = ctx.get('input', {}).get('text', '''\n    这款产品真的太棒了！完全符合我的期望。\n    虽然价格有点贵，但是质量真的很好，值得。\n    客服态度也非常好，有问必答。\n    ''').strip()\n    \n    return {'text': text, 'source': 'user_input'}",
-        "timeout": 30
-      }
+      "configRef": "nodes/prepare-text.json"
     },
     {
       "id": "node_llm_sentiment",
@@ -55,16 +48,9 @@
       ],
       "metadata": {
         "name": "情感分析",
-        "description": "分析文本情感倾向",
-        "icon": "sparkle",
-        "color": "#9C27B0"
+        "description": "分析文本情感倾向"
       },
-      "data": {
-        "model": "gpt-4",
-        "systemPrompt": "你是一个专业的文本情感分析助手。分析给定文本的情感倾向，以 JSON 格式返回结果。",
-        "temperature": 0.3,
-        "maxTokens": 500
-      }
+      "configRef": "nodes/sentiment-analysis.json"
     },
     {
       "id": "node_llm_summary",
@@ -80,16 +66,9 @@
       ],
       "metadata": {
         "name": "内容摘要",
-        "description": "生成文本摘要",
-        "icon": "sparkle",
-        "color": "#9C27B0"
+        "description": "生成文本摘要"
       },
-      "data": {
-        "model": "gpt-4",
-        "systemPrompt": "你是一个专业的文本摘要助手。为给定文本生成简洁的摘要。",
-        "temperature": 0.5,
-        "maxTokens": 300
-      }
+      "configRef": "nodes/text-summary.json"
     },
     {
       "id": "node_format",
@@ -103,14 +82,9 @@
       ],
       "metadata": {
         "name": "格式化结果",
-        "description": "整合分析结果",
-        "icon": "code",
-        "color": "#2196F3"
+        "description": "整合分析结果"
       },
-      "data": {
-        "code": "def main(ctx):\n    data = ctx.get('input', {})\n    sentiment = data.get('sentiment', '未知')\n    summary = data.get('summary', '无摘要')\n    original = data.get('original', '')\n    \n    return {\n        'original_text': original[:200] + '...' if len(original) > 200 else original,\n        'sentiment_analysis': sentiment,\n        'summary': summary,\n        'word_count': len(original.split()),\n        'analyzed_at': __import__('datetime').datetime.now().isoformat()\n    }",
-        "timeout": 30
-      }
+      "configRef": "nodes/format-result.json"
     },
     {
       "id": "node_end",
@@ -122,9 +96,7 @@
       "outputs": [],
       "metadata": {
         "name": "结束",
-        "description": "工作流出口",
-        "icon": "stop",
-        "color": "#F44336"
+        "description": "工作流出口"
       },
       "data": { "outputMapping": {} }
     }

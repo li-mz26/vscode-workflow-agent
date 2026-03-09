@@ -1,7 +1,7 @@
-import { 
-    Workflow, 
-    NodeConfig, 
-    Edge, 
+import {
+    Workflow,
+    NodeConfig,
+    Edge,
     ExecutionState,
     ExecutionResult,
     ExecutionContext,
@@ -10,6 +10,8 @@ import {
 } from '../../shared/types';
 import { EventEmitter } from 'events';
 import { NodeExecutorFactory } from './executors/NodeExecutorFactory';
+import * as fs from 'fs';
+import * as path from 'path';
 
 interface ExecutionNode {
     node: NodeConfig;
@@ -56,12 +58,55 @@ export class ExecutionEngine extends EventEmitter {
 
     private initializeNodes(): void {
         for (const node of this.workflow.nodes) {
+            // 加载外部配置（如果有 configRef）
+            const mergedNode = this.loadNodeConfig(node);
             this.nodeMap.set(node.id, {
-                node,
+                node: mergedNode,
                 status: 'pending',
                 inputs: new Map()
             });
         }
+    }
+
+    private loadNodeConfig(node: NodeConfig): NodeConfig {
+        // 如果没有 configRef，直接返回原节点
+        if (!(node as any).configRef) {
+            return node;
+        }
+
+        const configRef = (node as any).configRef as string;
+        try {
+            // 获取 workflow.json 所在目录
+            const workflowDir = (this.workflow as any).workflowDir || process.cwd();
+            const configPath = path.resolve(workflowDir, configRef);
+
+            if (fs.existsSync(configPath)) {
+                const configContent = fs.readFileSync(configPath, 'utf-8');
+                const externalConfig = JSON.parse(configContent);
+
+                // 合并配置：外部配置优先，但保留节点的 id、position、inputs、outputs、metadata
+                return {
+                    ...externalConfig,
+                    id: node.id,
+                    type: node.type,
+                    position: node.position,
+                    inputs: node.inputs,
+                    outputs: node.outputs,
+                    metadata: {
+                        ...node.metadata,
+                        ...externalConfig.metadata
+                    },
+                    // data 字段合并：外部配置的 data 优先
+                    data: externalConfig.data || externalConfig // 对于 code/switch/llm 节点，配置可能在根级别
+                };
+            } else {
+                this.log('warn', `Config file not found: ${configPath}`, node.id);
+            }
+        } catch (error) {
+            this.log('error', `Failed to load config: ${(error as Error).message}`, node.id);
+        }
+
+        return node;
     }
 
     async start(inputs?: Record<string, any>): Promise<ExecutionResult> {

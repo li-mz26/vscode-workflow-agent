@@ -1,0 +1,6 @@
+{
+  "$schema": "https://workflow-agent/config/code-node.json",
+  "type": "code",
+  "timeout": 30,
+  "code": "def main(ctx):\n    import random\n    score = random.randint(0, 100)\n    _result = {'score': score, 'student': '张三'}\n    return _result"
+}
