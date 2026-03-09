@@ -69,127 +69,6 @@ export class EndNodeExecutor extends NodeExecutor {
     }
 }
 
-// Code 节点执行器
-export class CodeNodeExecutor extends NodeExecutor {
-    type = 'code';
-
-    async execute(node: NodeConfig, context: ExecutionContext): Promise<NodeExecutionResult> {
-        const { code, timeout = 30 } = node.data;
-        const inputs = this.resolveInputs(node, context);
-
-        try {
-            // 这里应该调用 Python 沙箱执行
-            // 暂时使用模拟实现
-            const result = await this.executePython(code, inputs, timeout);
-            
-            return {
-                success: true,
-                outputs: { output: result },
-                logs: ['Code executed successfully']
-            };
-        } catch (error) {
-            return {
-                success: false,
-                error: error as Error,
-                logs: [`Error: ${(error as Error).message}`]
-            };
-        }
-    }
-
-    private async executePython(
-        code: string, 
-        inputs: Record<string, any>, 
-        timeout: number
-    ): Promise<any> {
-        // TODO: 集成 Python 沙箱 (Pyodide 或子进程)
-        // 临时返回模拟结果
-        return { code, inputs, executed: true };
-    }
-
-    validate(config: Record<string, any>): ValidationResult {
-        if (!config.code || typeof config.code !== 'string') {
-            return { valid: false, errors: ['Code is required'] };
-        }
-        return { valid: true };
-    }
-}
-
-// LLM 节点执行器
-export class LLMNodeExecutor extends NodeExecutor {
-    type = 'llm';
-
-    async execute(node: NodeConfig, context: ExecutionContext): Promise<NodeExecutionResult> {
-        const { 
-            model, 
-            prompt: promptTemplate, 
-            systemPrompt: systemTemplate,
-            temperature = 0.7, 
-            maxTokens = 2000 
-        } = node.data;
-
-        const inputs = this.resolveInputs(node, context);
-
-        try {
-            // 渲染模板
-            const prompt = this.renderTemplate(promptTemplate, inputs, context);
-            const system = systemTemplate ? this.renderTemplate(systemTemplate, inputs, context) : undefined;
-
-            // TODO: 调用实际的 LLM API
-            // 临时返回模拟结果
-            const mockResponse = await this.callLLM(model, prompt, system, temperature, maxTokens);
-
-            return {
-                success: true,
-                outputs: {
-                    content: mockResponse.content,
-                    usage: mockResponse.usage
-                }
-            };
-        } catch (error) {
-            return {
-                success: false,
-                error: error as Error
-            };
-        }
-    }
-
-    private renderTemplate(
-        template: string, 
-        inputs: Record<string, any>, 
-        context: ExecutionContext
-    ): string {
-        // 简单的模板替换: {{variable}} 或 {{ctx.variable}}
-        return template.replace(/\{\{(\w+)(?:\.(\w+))?\}\}/g, (match, name, subname) => {
-            if (name === 'ctx' && subname) {
-                return context.variables.get(subname) ?? match;
-            }
-            return inputs[name] ?? context.variables.get(name) ?? match;
-        });
-    }
-
-    private async callLLM(
-        model: string,
-        prompt: string,
-        systemPrompt: string | undefined,
-        temperature: number,
-        maxTokens: number
-    ): Promise<{ content: string; usage: any }> {
-        // TODO: 集成实际的 LLM 调用
-        // 临时返回模拟结果
-        return {
-            content: `Mock response for: ${prompt.substring(0, 50)}...`,
-            usage: { prompt_tokens: 10, completion_tokens: 20, total_tokens: 30 }
-        };
-    }
-
-    validate(config: Record<string, any>): ValidationResult {
-        const errors: string[] = [];
-        if (!config.model) errors.push('Model is required');
-        if (!config.prompt) errors.push('Prompt is required');
-        return { valid: errors.length === 0, errors: errors.length > 0 ? errors : undefined };
-    }
-}
-
 // Switch 节点执行器
 export class SwitchNodeExecutor extends NodeExecutor {
     type = 'switch';
@@ -298,16 +177,20 @@ export class NodeExecutorFactory {
     private static executors: Map<string, new () => NodeExecutor> = new Map([
         ['start', StartNodeExecutor],
         ['end', EndNodeExecutor],
-        ['code', CodeNodeExecutor],
-        ['llm', LLMNodeExecutor],
         ['switch', SwitchNodeExecutor],
         ['parallel', ParallelNodeExecutor],
         ['merge', MergeNodeExecutor]
     ]);
 
     static create(type: string): NodeExecutor {
-        // 动态导入新节点执行器
+        // 动态导入执行器
         switch (type) {
+            case 'code':
+                const { CodeNodeExecutor } = require('./CodeNodeExecutor');
+                return new CodeNodeExecutor();
+            case 'llm':
+                const { LLMNodeExecutor } = require('./LLMNodeExecutor');
+                return new LLMNodeExecutor();
             case 'http':
                 const { HTTPNodeExecutor } = require('./HTTPNodeExecutor');
                 return new HTTPNodeExecutor();
