@@ -1,7 +1,7 @@
 {
   "id": "wf_conditional_branching",
   "name": "条件分支示例",
-  "description": "根据条件选择不同的处理路径 - 配置文件分离示例",
+  "description": "根据条件选择不同的处理路径",
   "version": "2.0.0",
   "nodes": [
     {
@@ -12,10 +12,6 @@
       "outputs": [
         { "id": "trigger", "name": "trigger", "type": "data", "dataType": "object", "required": true }
       ],
-      "metadata": {
-        "name": "开始",
-        "description": "工作流入口"
-      },
       "data": { "triggerType": "manual" }
     },
     {
@@ -28,11 +24,7 @@
       "outputs": [
         { "id": "output", "name": "output", "type": "data", "dataType": "any", "required": true }
       ],
-      "metadata": {
-        "name": "准备数据",
-        "description": "生成示例数据"
-      },
-      "configRef": "nodes/generate-score.json"
+      "configRef": "03-conditional-branching.config/code/node_input.json"
     },
     {
       "id": "node_switch",
@@ -46,11 +38,7 @@
         { "id": "good", "name": "良好", "type": "control", "dataType": "any", "required": false },
         { "id": "fail", "name": "不及格", "type": "control", "dataType": "any", "required": false }
       ],
-      "metadata": {
-        "name": "成绩判断",
-        "description": "根据分数判断等级"
-      },
-      "configRef": "nodes/grade-switch.json"
+      "configRef": "03-conditional-branching.config/switch/node_switch.json"
     },
     {
       "id": "node_excellent",
@@ -62,11 +50,7 @@
       "outputs": [
         { "id": "output", "name": "output", "type": "data", "dataType": "any", "required": true }
       ],
-      "metadata": {
-        "name": "优秀处理",
-        "description": "优秀成绩处理"
-      },
-      "configRef": "nodes/handle-excellent.json"
+      "configRef": "03-conditional-branching.config/code/node_excellent.json"
     },
     {
       "id": "node_good",
@@ -78,11 +62,7 @@
       "outputs": [
         { "id": "output", "name": "output", "type": "data", "dataType": "any", "required": true }
       ],
-      "metadata": {
-        "name": "良好处理",
-        "description": "良好成绩处理"
-      },
-      "configRef": "nodes/handle-good.json"
+      "configRef": "03-conditional-branching.config/code/node_good.json"
     },
     {
       "id": "node_fail",
@@ -94,11 +74,7 @@
       "outputs": [
         { "id": "output", "name": "output", "type": "data", "dataType": "any", "required": true }
       ],
-      "metadata": {
-        "name": "不及格处理",
-        "description": "不及格成绩处理"
-      },
-      "configRef": "nodes/handle-fail.json"
+      "configRef": "03-conditional-branching.config/code/node_fail.json"
     },
     {
       "id": "node_merge",
@@ -110,11 +86,7 @@
       "outputs": [
         { "id": "output", "name": "output", "type": "data", "dataType": "any", "required": true }
       ],
-      "metadata": {
-        "name": "合并结果",
-        "description": "汇总处理结果"
-      },
-      "configRef": "nodes/merge-result.json"
+      "configRef": "03-conditional-branching.config/code/node_merge.json"
     },
     {
       "id": "node_end",
@@ -124,63 +96,20 @@
         { "id": "result", "name": "result", "type": "data", "dataType": "any", "required": false }
       ],
       "outputs": [],
-      "metadata": {
-        "name": "结束",
-        "description": "工作流出口"
-      },
       "data": { "outputMapping": {} }
     }
   ],
   "edges": [
-    {
-      "id": "edge_start_input",
-      "source": { "nodeId": "node_start", "portId": "trigger" },
-      "target": { "nodeId": "node_input", "portId": "input" }
-    },
-    {
-      "id": "edge_input_switch",
-      "source": { "nodeId": "node_input", "portId": "output" },
-      "target": { "nodeId": "node_switch", "portId": "input" }
-    },
-    {
-      "id": "edge_switch_excellent",
-      "source": { "nodeId": "node_switch", "portId": "excellent" },
-      "target": { "nodeId": "node_excellent", "portId": "input" }
-    },
-    {
-      "id": "edge_switch_good",
-      "source": { "nodeId": "node_switch", "portId": "good" },
-      "target": { "nodeId": "node_good", "portId": "input" }
-    },
-    {
-      "id": "edge_switch_fail",
-      "source": { "nodeId": "node_switch", "portId": "fail" },
-      "target": { "nodeId": "node_fail", "portId": "input" }
-    },
-    {
-      "id": "edge_excellent_merge",
-      "source": { "nodeId": "node_excellent", "portId": "output" },
-      "target": { "nodeId": "node_merge", "portId": "input" }
-    },
-    {
-      "id": "edge_good_merge",
-      "source": { "nodeId": "node_good", "portId": "output" },
-      "target": { "nodeId": "node_merge", "portId": "input" }
-    },
-    {
-      "id": "edge_fail_merge",
-      "source": { "nodeId": "node_fail", "portId": "output" },
-      "target": { "nodeId": "node_merge", "portId": "input" }
-    },
-    {
-      "id": "edge_merge_end",
-      "source": { "nodeId": "node_merge", "portId": "output" },
-      "target": { "nodeId": "node_end", "portId": "result" }
-    }
+    { "id": "edge_start_input", "source": { "nodeId": "node_start", "portId": "trigger" }, "target": { "nodeId": "node_input", "portId": "input" } },
+    { "id": "edge_input_switch", "source": { "nodeId": "node_input", "portId": "output" }, "target": { "nodeId": "node_switch", "portId": "input" } },
+    { "id": "edge_switch_excellent", "source": { "nodeId": "node_switch", "portId": "excellent" }, "target": { "nodeId": "node_excellent", "portId": "input" } },
+    { "id": "edge_switch_good", "source": { "nodeId": "node_switch", "portId": "good" }, "target": { "nodeId": "node_good", "portId": "input" } },
+    { "id": "edge_switch_fail", "source": { "nodeId": "node_switch", "portId": "fail" }, "target": { "nodeId": "node_fail", "portId": "input" } },
+    { "id": "edge_excellent_merge", "source": { "nodeId": "node_excellent", "portId": "output" }, "target": { "nodeId": "node_merge", "portId": "input" } },
+    { "id": "edge_good_merge", "source": { "nodeId": "node_good", "portId": "output" }, "target": { "nodeId": "node_merge", "portId": "input" } },
+    { "id": "edge_fail_merge", "source": { "nodeId": "node_fail", "portId": "output" }, "target": { "nodeId": "node_merge", "portId": "input" } },
+    { "id": "edge_merge_end", "source": { "nodeId": "node_merge", "portId": "output" }, "target": { "nodeId": "node_end", "portId": "result" } }
   ],
   "variables": [],
-  "settings": {
-    "timeout": 120,
-    "logLevel": "info"
-  }
+  "settings": { "timeout": 120, "logLevel": "info" }
 }

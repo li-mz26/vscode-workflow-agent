@@ -1,7 +1,7 @@
 {
   "id": "wf_llm_text_analysis",
   "name": "LLM 文本分析",
-  "description": "使用大语言模型分析文本情感和内容 - 配置文件分离示例",
+  "description": "使用大语言模型分析文本情感和内容",
   "version": "2.0.0",
   "nodes": [
     {
@@ -12,10 +12,6 @@
       "outputs": [
         { "id": "trigger", "name": "trigger", "type": "data", "dataType": "object", "required": true }
       ],
-      "metadata": {
-        "name": "开始",
-        "description": "工作流入口"
-      },
       "data": { "triggerType": "manual" }
     },
     {
@@ -28,11 +24,7 @@
       "outputs": [
         { "id": "output", "name": "output", "type": "data", "dataType": "any", "required": true }
       ],
-      "metadata": {
-        "name": "准备文本",
-        "description": "准备待分析的文本"
-      },
-      "configRef": "nodes/prepare-text.json"
+      "configRef": "05-llm-text-analysis.config/code/node_prepare.json"
     },
     {
       "id": "node_llm_sentiment",
@@ -46,11 +38,7 @@
         { "id": "content", "name": "content", "type": "data", "dataType": "string", "required": true },
         { "id": "usage", "name": "usage", "type": "data", "dataType": "object", "required": true }
       ],
-      "metadata": {
-        "name": "情感分析",
-        "description": "分析文本情感倾向"
-      },
-      "configRef": "nodes/sentiment-analysis.json"
+      "configRef": "05-llm-text-analysis.config/llm/node_sentiment.json"
     },
     {
       "id": "node_llm_summary",
@@ -64,11 +52,7 @@
         { "id": "content", "name": "content", "type": "data", "dataType": "string", "required": true },
         { "id": "usage", "name": "usage", "type": "data", "dataType": "object", "required": true }
       ],
-      "metadata": {
-        "name": "内容摘要",
-        "description": "生成文本摘要"
-      },
-      "configRef": "nodes/text-summary.json"
+      "configRef": "05-llm-text-analysis.config/llm/node_summary.json"
     },
     {
       "id": "node_format",
@@ -80,11 +64,7 @@
       "outputs": [
         { "id": "output", "name": "output", "type": "data", "dataType": "any", "required": true }
       ],
-      "metadata": {
-        "name": "格式化结果",
-        "description": "整合分析结果"
-      },
-      "configRef": "nodes/format-result.json"
+      "configRef": "05-llm-text-analysis.config/code/node_format.json"
     },
     {
       "id": "node_end",
@@ -94,50 +74,19 @@
         { "id": "result", "name": "result", "type": "data", "dataType": "any", "required": false }
       ],
       "outputs": [],
-      "metadata": {
-        "name": "结束",
-        "description": "工作流出口"
-      },
       "data": { "outputMapping": {} }
     }
   ],
   "edges": [
-    {
-      "id": "edge_start_prepare",
-      "source": { "nodeId": "node_start", "portId": "trigger" },
-      "target": { "nodeId": "node_prepare", "portId": "input" }
-    },
-    {
-      "id": "edge_prepare_sentiment",
-      "source": { "nodeId": "node_prepare", "portId": "output" },
-      "target": { "nodeId": "node_llm_sentiment", "portId": "prompt" }
-    },
-    {
-      "id": "edge_prepare_summary",
-      "source": { "nodeId": "node_prepare", "portId": "output" },
-      "target": { "nodeId": "node_llm_summary", "portId": "prompt" }
-    },
-    {
-      "id": "edge_sentiment_format",
-      "source": { "nodeId": "node_llm_sentiment", "portId": "content" },
-      "target": { "nodeId": "node_format", "portId": "input" }
-    },
-    {
-      "id": "edge_summary_format",
-      "source": { "nodeId": "node_llm_summary", "portId": "content" },
-      "target": { "nodeId": "node_format", "portId": "input" }
-    },
-    {
-      "id": "edge_format_end",
-      "source": { "nodeId": "node_format", "portId": "output" },
-      "target": { "nodeId": "node_end", "portId": "result" }
-    }
+    { "id": "edge_start_prepare", "source": { "nodeId": "node_start", "portId": "trigger" }, "target": { "nodeId": "node_prepare", "portId": "input" } },
+    { "id": "edge_prepare_sentiment", "source": { "nodeId": "node_prepare", "portId": "output" }, "target": { "nodeId": "node_llm_sentiment", "portId": "prompt" } },
+    { "id": "edge_prepare_summary", "source": { "nodeId": "node_prepare", "portId": "output" }, "target": { "nodeId": "node_llm_summary", "portId": "prompt" } },
+    { "id": "edge_sentiment_format", "source": { "nodeId": "node_llm_sentiment", "portId": "content" }, "target": { "nodeId": "node_format", "portId": "input" } },
+    { "id": "edge_summary_format", "source": { "nodeId": "node_llm_summary", "portId": "content" }, "target": { "nodeId": "node_format", "portId": "input" } },
+    { "id": "edge_format_end", "source": { "nodeId": "node_format", "portId": "output" }, "target": { "nodeId": "node_end", "portId": "result" } }
   ],
   "variables": [
     { "name": "openai_api_key", "type": "string", "defaultValue": "" }
   ],
-  "settings": {
-    "timeout": 300,
-    "logLevel": "info"
-  }
+  "settings": { "timeout": 300, "logLevel": "info" }
 }

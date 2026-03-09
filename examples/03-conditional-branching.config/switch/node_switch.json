@@ -6,15 +6,15 @@
       "name": "优秀 (≥90)",
       "expression": "input.score >= 90",
       "target": "excellent",
-      "description": "成绩大于等于90分为优秀"
+      "description": "分数大于等于90分"
     },
     {
       "name": "良好 (≥60)",
       "expression": "input.score >= 60",
       "target": "good",
-      "description": "成绩大于等于60分为良好"
+      "description": "分数大于等于60分但小于90分"
     }
   ],
   "defaultTarget": "fail",
-  "defaultDescription": "成绩低于60分为不及格"
+  "defaultDescription": "分数小于60分，不及格"
 }
