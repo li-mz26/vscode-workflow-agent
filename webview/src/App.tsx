@@ -43,6 +43,8 @@ function App() {
     const [jsonError, setJsonError] = useState<string | null>(null);
     const { workflow, setWorkflow, addNode, deleteNode, markClean } = useCanvasStore();
     const deleteZoneRef = useRef<HTMLDivElement>(null);
+
+    const getCurrentWorkflow = useCallback(() => useCanvasStore.getState().workflow, []);
     
     // Load workflow from VSCode
     useEffect(() => {
@@ -146,20 +148,23 @@ function App() {
             const node = workflow.nodes.find(n => n.id === draggedNodeId);
             if (node) {
                 deleteNode(draggedNodeId);
-                vscode.postMessage({
-                    type: 'node:delete',
-                    payload: { 
-                        workflow,
-                        nodeId: draggedNodeId,
-                        nodeType: node.type
-                    }
-                });
+                const nextWorkflow = getCurrentWorkflow();
+                if (nextWorkflow) {
+                    vscode.postMessage({
+                        type: 'node:delete',
+                        payload: { 
+                            workflow: nextWorkflow,
+                            nodeId: draggedNodeId,
+                            nodeType: node.type
+                        }
+                    });
+                }
             }
         }
         setIsDeleteZoneActive(false);
         setDraggedNodeId(null);
         delete (window as any).__isNewNode;
-    }, [draggedNodeId, workflow, deleteNode]);
+    }, [draggedNodeId, workflow, deleteNode, getCurrentWorkflow]);
     
     // Handle drop on canvas
     const handleCanvasDrop = useCallback((e: React.DragEvent) => {
@@ -182,15 +187,18 @@ function App() {
         
         const node = nodeRegistry.createNode(type, { x, y });
         addNode(node);
-        
-        vscode.postMessage({
-            type: 'node:add',
-            payload: { workflow, node }
-        });
+
+        const nextWorkflow = getCurrentWorkflow();
+        if (nextWorkflow) {
+            vscode.postMessage({
+                type: 'node:add',
+                payload: { workflow: nextWorkflow, node }
+            });
+        }
         
         delete (window as any).__draggedNodeType;
         delete (window as any).__isNewNode;
-    }, [addNode, workflow]);
+    }, [addNode, getCurrentWorkflow]);
     
     // Handle save
     const handleSave = useCallback(() => {
@@ -238,14 +246,17 @@ function App() {
                     const node = workflow?.nodes.find(n => n.id === draggedNodeId);
                     if (node) {
                         deleteNode(draggedNodeId);
-                        vscode.postMessage({
-                            type: 'node:delete',
-                            payload: {
-                                workflow,
-                                nodeId: draggedNodeId,
-                                nodeType: node.type
-                            }
-                        });
+                        const nextWorkflow = getCurrentWorkflow();
+                        if (nextWorkflow) {
+                            vscode.postMessage({
+                                type: 'node:delete',
+                                payload: {
+                                    workflow: nextWorkflow,
+                                    nodeId: draggedNodeId,
+                                    nodeType: node.type
+                                }
+                            });
+                        }
                     }
                 }
             }
@@ -255,7 +266,7 @@ function App() {
 
         window.addEventListener('mouseup', handleGlobalMouseUp);
         return () => window.removeEventListener('mouseup', handleGlobalMouseUp);
-    }, [draggedNodeId, workflow, deleteNode]);
+    }, [draggedNodeId, workflow, deleteNode, getCurrentWorkflow]);
 
     return (
         <div style={{
@@ -383,14 +394,17 @@ function App() {
                                             const node = workflow.nodes.find(n => n.id === nodeId);
                                             if (node) {
                                                 deleteNode(nodeId);
-                                                vscode.postMessage({
-                                                    type: 'node:delete',
-                                                    payload: {
-                                                        workflow,
-                                                        nodeId,
-                                                        nodeType: node.type
-                                                    }
-                                                });
+                                                const nextWorkflow = getCurrentWorkflow();
+                                                if (nextWorkflow) {
+                                                    vscode.postMessage({
+                                                        type: 'node:delete',
+                                                        payload: {
+                                                            workflow: nextWorkflow,
+                                                            nodeId,
+                                                            nodeType: node.type
+                                                        }
+                                                    });
+                                                }
                                             }
                                         }
                                     }
