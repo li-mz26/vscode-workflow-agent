@@ -172,6 +172,12 @@ function App() {
     // Handle drop on delete zone
     const handleDeleteZoneDrop = useCallback((e: React.DragEvent) => {
         e.preventDefault();
+        // 只处理从画布拖拽的节点，不处理从 palette 拖拽的新节点
+        const isNewNode = (window as any).__isNewNode;
+        if (isNewNode) {
+            // 新节点拖到删除区，不处理，让事件继续传播
+            return;
+        }
         if (draggedNodeId && workflow) {
             const node = workflow.nodes.find(n => n.id === draggedNodeId);
             if (node) {
@@ -194,6 +200,8 @@ function App() {
     // Handle drop on canvas
     const handleCanvasDrop = useCallback((e: React.DragEvent) => {
         e.preventDefault();
+        e.stopPropagation();
+        
         const type = (window as any).__draggedNodeType;
         const isNewNode = (window as any).__isNewNode;
         
@@ -211,16 +219,19 @@ function App() {
         const y = (e.clientY - rect.top - 40);
         
         const node = nodeRegistry.createNode(type, { x, y });
+        
+        // 使用 getState 获取最新的 workflow，避免闭包问题
+        const currentWorkflow = useCanvasStore.getState().workflow;
         addNode(node);
         
         vscode.postMessage({
             type: 'node:add',
-            payload: { workflow, node }
+            payload: { workflow: currentWorkflow, node }
         });
         
         delete (window as any).__draggedNodeType;
         delete (window as any).__isNewNode;
-    }, [addNode, workflow]);
+    }, [addNode]);
     
     // Handle save
     const handleSave = useCallback(() => {
@@ -444,7 +455,8 @@ function App() {
                                 executionState={executionState}
                             />
                             
-                            {/* 删除区域 */}
+                            {/* 删除区域 - 只在从画布拖拽节点时显示 */}
+                            {draggedNodeId && (
                             <div
                                 ref={deleteZoneRef}
                                 style={{
@@ -465,8 +477,6 @@ function App() {
                                     alignItems: 'center',
                                     justifyContent: 'center',
                                     transition: 'all 0.2s ease',
-                                    opacity: draggedNodeId ? 1 : 0.3,
-                                    pointerEvents: draggedNodeId ? 'auto' : 'none',
                                     zIndex: 1000
                                 }}
                                 onDragOver={handleDeleteZoneDragOver}
@@ -491,6 +501,7 @@ function App() {
                                     删除节点
                                 </span>
                             </div>
+                            )}
                         </>
                     ) : (
                         /* JSON 文本编辑器 */
