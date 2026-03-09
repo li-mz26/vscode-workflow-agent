@@ -60,6 +60,7 @@ export const NodePalette: React.FC<NodePaletteProps> = ({ onNodeDragStart }) => 
                                 draggable
                                 onDragStart={(e) => {
                                     e.dataTransfer.setData('application/x-workflow-node-type', nodeType.type);
+                                    e.dataTransfer.setData('text/plain', nodeType.type);
                                     e.dataTransfer.effectAllowed = 'copy';
                                     onNodeDragStart(nodeType.type);
                                 }}
