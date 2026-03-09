@@ -6,6 +6,12 @@ import { Toolbar } from './components/Toolbar';
 import { useCanvasStore } from './stores/canvasStore';
 import { NodeRegistry } from '../../src/core/node/NodeRegistry';
 
+declare function acquireVsCodeApi(): {
+    postMessage(message: unknown): void;
+    getState(): unknown;
+    setState(newState: unknown): void;
+};
+
 const vscode = acquireVsCodeApi();
 const nodeRegistry = new NodeRegistry();
 
