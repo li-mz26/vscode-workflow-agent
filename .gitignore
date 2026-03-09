@@ -18,6 +18,9 @@ build/
 *.d.ts.map
 *.js.map
 
+# 但保留 webview 的类型声明文件
+!webview/src/vscode.d.ts
+
 # Compiled JavaScript (source maps only, keep .js for execution)
 # But we need out/ for the extension to work, so handle carefully
 
