@@ -58,6 +58,12 @@ export interface WorkflowData {
 
 export type ExecutionState = 'idle' | 'running' | 'paused' | 'completed' | 'failed' | 'stopped';
 
+// History entry for undo/redo
+interface HistoryEntry {
+    workflow: WorkflowData;
+    timestamp: number;
+}
+
 interface CanvasState {
     // Workflow data
     workflow: WorkflowData | null;
@@ -80,8 +86,11 @@ interface CanvasState {
         logs: Array<{ timestamp: string; level: string; message: string; nodeId?: string }>;
     } | null;
     
-    // History
+    // History for undo/redo
     history: {
+        undoStack: HistoryEntry[];
+        redoStack: HistoryEntry[];
+        maxSize: number;
         canUndo: boolean;
         canRedo: boolean;
     };
@@ -115,6 +124,16 @@ interface CanvasState {
     setExecution: (execution: CanvasState['execution']) => void;
     markDirty: () => void;
     markClean: () => void;
+    
+    // Undo/Redo actions
+    undo: () => void;
+    redo: () => void;
+    clearHistory: () => void;
+}
+
+// Deep clone helper
+function deepClone<T>(obj: T): T {
+    return JSON.parse(JSON.stringify(obj));
 }
 
 export const useCanvasStore = create<CanvasState>()(
@@ -125,16 +144,49 @@ export const useCanvasStore = create<CanvasState>()(
         selectedNodes: [],
         selectedEdges: [],
         execution: null,
-        history: { canUndo: false, canRedo: false },
+        history: { 
+            undoStack: [],
+            redoStack: [],
+            maxSize: 50,
+            canUndo: false,
+            canRedo: false
+        },
         draggingNode: null,
         dragOffset: { x: 0, y: 0 },
         connectingFrom: null,
         mousePosition: { x: 0, y: 0 },
         
-        setWorkflow: (workflow) => set({ workflow, isDirty: false }),
+        setWorkflow: (workflow) => set({ 
+            workflow, 
+            isDirty: false,
+            history: {
+                undoStack: [],
+                redoStack: [],
+                maxSize: 50,
+                canUndo: false,
+                canRedo: false
+            }
+        }),
         
         updateWorkflow: (updates) => set((state) => {
             if (state.workflow) {
+                // Save current state to undo stack before modifying
+                const currentState: HistoryEntry = {
+                    workflow: deepClone(state.workflow),
+                    timestamp: Date.now()
+                };
+                state.history.undoStack.push(currentState);
+                
+                // Limit stack size
+                if (state.history.undoStack.length > state.history.maxSize) {
+                    state.history.undoStack.shift();
+                }
+                
+                // Clear redo stack on new action
+                state.history.redoStack = [];
+                state.history.canUndo = true;
+                state.history.canRedo = false;
+                
                 Object.assign(state.workflow, updates);
                 state.isDirty = true;
             }
@@ -143,6 +195,21 @@ export const useCanvasStore = create<CanvasState>()(
         updateNode: (nodeId, updates) => set((state) => {
             const node = state.workflow?.nodes.find((n) => n.id === nodeId);
             if (node) {
+                // Save current state to undo stack before modifying
+                const currentState: HistoryEntry = {
+                    workflow: deepClone(state.workflow!),
+                    timestamp: Date.now()
+                };
+                state.history.undoStack.push(currentState);
+                
+                if (state.history.undoStack.length > state.history.maxSize) {
+                    state.history.undoStack.shift();
+                }
+                
+                state.history.redoStack = [];
+                state.history.canUndo = true;
+                state.history.canRedo = false;
+                
                 Object.assign(node, updates);
                 state.isDirty = true;
             }
@@ -151,6 +218,20 @@ export const useCanvasStore = create<CanvasState>()(
         updateNodeData: (nodeId, data) => set((state) => {
             const node = state.workflow?.nodes.find((n) => n.id === nodeId);
             if (node) {
+                const currentState: HistoryEntry = {
+                    workflow: deepClone(state.workflow!),
+                    timestamp: Date.now()
+                };
+                state.history.undoStack.push(currentState);
+                
+                if (state.history.undoStack.length > state.history.maxSize) {
+                    state.history.undoStack.shift();
+                }
+                
+                state.history.redoStack = [];
+                state.history.canUndo = true;
+                state.history.canRedo = false;
+                
                 Object.assign(node.data, data);
                 state.isDirty = true;
             }
@@ -159,19 +240,51 @@ export const useCanvasStore = create<CanvasState>()(
         moveNode: (nodeId, position) => set((state) => {
             const node = state.workflow?.nodes.find((n) => n.id === nodeId);
             if (node) {
+                // Don't record history for drag operations to avoid spam
+                // Only save on drag end (handled separately)
                 node.position = position;
                 state.isDirty = true;
             }
         }),
         
         addNode: (node) => set((state) => {
-            state.workflow?.nodes.push(node);
-            state.selectedNodes = [node.id];
-            state.isDirty = true;
+            if (state.workflow) {
+                const currentState: HistoryEntry = {
+                    workflow: deepClone(state.workflow),
+                    timestamp: Date.now()
+                };
+                state.history.undoStack.push(currentState);
+                
+                if (state.history.undoStack.length > state.history.maxSize) {
+                    state.history.undoStack.shift();
+                }
+                
+                state.history.redoStack = [];
+                state.history.canUndo = true;
+                state.history.canRedo = false;
+                
+                state.workflow.nodes.push(node);
+                state.selectedNodes = [node.id];
+                state.isDirty = true;
+            }
         }),
         
         deleteNode: (nodeId) => set((state) => {
             if (state.workflow) {
+                const currentState: HistoryEntry = {
+                    workflow: deepClone(state.workflow),
+                    timestamp: Date.now()
+                };
+                state.history.undoStack.push(currentState);
+                
+                if (state.history.undoStack.length > state.history.maxSize) {
+                    state.history.undoStack.shift();
+                }
+                
+                state.history.redoStack = [];
+                state.history.canUndo = true;
+                state.history.canRedo = false;
+                
                 state.workflow.nodes = state.workflow.nodes.filter((n) => n.id !== nodeId);
                 state.workflow.edges = state.workflow.edges.filter(
                     (e) => e.source.nodeId !== nodeId && e.target.nodeId !== nodeId
@@ -182,12 +295,42 @@ export const useCanvasStore = create<CanvasState>()(
         }),
         
         addEdge: (edge) => set((state) => {
-            state.workflow?.edges.push(edge);
-            state.isDirty = true;
+            if (state.workflow) {
+                const currentState: HistoryEntry = {
+                    workflow: deepClone(state.workflow),
+                    timestamp: Date.now()
+                };
+                state.history.undoStack.push(currentState);
+                
+                if (state.history.undoStack.length > state.history.maxSize) {
+                    state.history.undoStack.shift();
+                }
+                
+                state.history.redoStack = [];
+                state.history.canUndo = true;
+                state.history.canRedo = false;
+                
+                state.workflow.edges.push(edge);
+                state.isDirty = true;
+            }
         }),
         
         deleteEdge: (edgeId) => set((state) => {
             if (state.workflow) {
+                const currentState: HistoryEntry = {
+                    workflow: deepClone(state.workflow),
+                    timestamp: Date.now()
+                };
+                state.history.undoStack.push(currentState);
+                
+                if (state.history.undoStack.length > state.history.maxSize) {
+                    state.history.undoStack.shift();
+                }
+                
+                state.history.redoStack = [];
+                state.history.canUndo = true;
+                state.history.canRedo = false;
+                
                 state.workflow.edges = state.workflow.edges.filter((e) => e.id !== edgeId);
                 state.isDirty = true;
             }
@@ -231,6 +374,72 @@ export const useCanvasStore = create<CanvasState>()(
         setExecution: (execution) => set({ execution }),
         
         markDirty: () => set({ isDirty: true }),
-        markClean: () => set({ isDirty: false })
+        markClean: () => set({ isDirty: false }),
+        
+        // Undo action
+        undo: () => set((state) => {
+            if (state.history.undoStack.length === 0 || !state.workflow) return;
+            
+            // Pop the last state from undo stack
+            const lastEntry = state.history.undoStack.pop()!;
+            
+            // Push current state to redo stack
+            const currentState: HistoryEntry = {
+                workflow: deepClone(state.workflow),
+                timestamp: Date.now()
+            };
+            state.history.redoStack.push(currentState);
+            
+            // Limit redo stack size
+            if (state.history.redoStack.length > state.history.maxSize) {
+                state.history.redoStack.shift();
+            }
+            
+            // Restore the workflow from undo stack
+            state.workflow = lastEntry.workflow;
+            state.selectedNodes = [];
+            state.isDirty = true;
+            
+            // Update canUndo/canRedo flags
+            state.history.canUndo = state.history.undoStack.length > 0;
+            state.history.canRedo = true;
+        }),
+        
+        // Redo action
+        redo: () => set((state) => {
+            if (state.history.redoStack.length === 0 || !state.workflow) return;
+            
+            // Pop the last state from redo stack
+            const nextEntry = state.history.redoStack.pop()!;
+            
+            // Push current state to undo stack
+            const currentState: HistoryEntry = {
+                workflow: deepClone(state.workflow),
+                timestamp: Date.now()
+            };
+            state.history.undoStack.push(currentState);
+            
+            // Limit undo stack size
+            if (state.history.undoStack.length > state.history.maxSize) {
+                state.history.undoStack.shift();
+            }
+            
+            // Restore the workflow from redo stack
+            state.workflow = nextEntry.workflow;
+            state.selectedNodes = [];
+            state.isDirty = true;
+            
+            // Update canUndo/canRedo flags
+            state.history.canUndo = true;
+            state.history.canRedo = state.history.redoStack.length > 0;
+        }),
+        
+        // Clear history
+        clearHistory: () => set((state) => {
+            state.history.undoStack = [];
+            state.history.redoStack = [];
+            state.history.canUndo = false;
+            state.history.canRedo = false;
+        })
     }))
 );

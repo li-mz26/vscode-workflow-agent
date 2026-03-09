@@ -4,7 +4,11 @@ interface ToolbarProps {
     onSave: () => void;
     onRun: () => void;
     onDebug: () => void;
+    onUndo: () => void;
+    onRedo: () => void;
     canSave: boolean;
+    canUndo: boolean;
+    canRedo: boolean;
     isRunning?: boolean;
 }
 
@@ -12,7 +16,11 @@ export const Toolbar: React.FC<ToolbarProps> = ({
     onSave,
     onRun,
     onDebug,
+    onUndo,
+    onRedo,
     canSave,
+    canUndo,
+    canRedo,
     isRunning = false
 }) => {
     return (
@@ -45,6 +53,60 @@ export const Toolbar: React.FC<ToolbarProps> = ({
             >
                 <span>💾</span>
                 保存
+            </button>
+            
+            <div style={{ width: '1px', height: '20px', background: 'var(--vscode-panel-border)' }} />
+            
+            <button
+                onClick={onUndo}
+                disabled={!canUndo}
+                title="撤销 (Ctrl+Z)"
+                style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '4px',
+                    padding: '6px 12px',
+                    background: canUndo
+                        ? 'var(--vscode-button-secondaryBackground)'
+                        : 'var(--vscode-button-secondaryBackground)',
+                    color: canUndo
+                        ? 'var(--vscode-button-secondaryForeground)'
+                        : 'var(--vscode-disabledForeground)',
+                    border: 'none',
+                    borderRadius: '4px',
+                    cursor: canUndo ? 'pointer' : 'not-allowed',
+                    fontSize: '13px',
+                    opacity: canUndo ? 1 : 0.4
+                }}
+            >
+                <span>↩️</span>
+                撤销
+            </button>
+            
+            <button
+                onClick={onRedo}
+                disabled={!canRedo}
+                title="恢复 (Ctrl+Y)"
+                style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '4px',
+                    padding: '6px 12px',
+                    background: canRedo
+                        ? 'var(--vscode-button-secondaryBackground)'
+                        : 'var(--vscode-button-secondaryBackground)',
+                    color: canRedo
+                        ? 'var(--vscode-button-secondaryForeground)'
+                        : 'var(--vscode-disabledForeground)',
+                    border: 'none',
+                    borderRadius: '4px',
+                    cursor: canRedo ? 'pointer' : 'not-allowed',
+                    fontSize: '13px',
+                    opacity: canRedo ? 1 : 0.4
+                }}
+            >
+                <span>↪️</span>
+                恢复
             </button>
             
             <div style={{ width: '1px', height: '20px', background: 'var(--vscode-panel-border)' }} />

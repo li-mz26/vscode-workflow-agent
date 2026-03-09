@@ -35,7 +35,20 @@ function App() {
     const [viewMode, setViewMode] = useState<ViewMode>('visual');
     const [jsonContent, setJsonContent] = useState<string>('');
     const [jsonError, setJsonError] = useState<string | null>(null);
-    const { workflow, setWorkflow, addNode, deleteNode, markClean } = useCanvasStore();
+    
+    // 从 store 获取需要的函数和状态
+    const { 
+        workflow, 
+        setWorkflow, 
+        addNode, 
+        deleteNode, 
+        markClean,
+        undo,
+        redo,
+        history,
+        isDirty
+    } = useCanvasStore();
+    
     const deleteZoneRef = useRef<HTMLDivElement>(null);
     
     // Load workflow from VSCode
@@ -68,6 +81,29 @@ function App() {
         
         return () => window.removeEventListener('message', handleMessage);
     }, [setWorkflow]);
+
+    // 键盘快捷键监听（撤销/恢复）
+    useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            // Ctrl+Z: 撤销
+            if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) {
+                e.preventDefault();
+                if (history.canUndo) {
+                    undo();
+                }
+            }
+            // Ctrl+Y 或 Ctrl+Shift+Z: 恢复
+            if ((e.ctrlKey || e.metaKey) && (e.key === 'y' || (e.key === 'z' && e.shiftKey))) {
+                e.preventDefault();
+                if (history.canRedo) {
+                    redo();
+                }
+            }
+        };
+
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [undo, redo, history.canUndo, history.canRedo]);
 
     // 同步 JSON 内容到 workflow
     useEffect(() => {
@@ -217,6 +253,16 @@ function App() {
         }
     }, [workflow]);
 
+    // Handle undo
+    const handleUndo = useCallback(() => {
+        undo();
+    }, [undo]);
+
+    // Handle redo
+    const handleRedo = useCallback(() => {
+        redo();
+    }, [redo]);
+
     // Global mouse up handler to detect delete zone drop
     useEffect(() => {
         const handleGlobalMouseUp = (e: MouseEvent) => {
@@ -264,8 +310,12 @@ function App() {
                 onSave={handleSave}
                 onRun={handleRun}
                 onDebug={handleDebug}
+                onUndo={handleUndo}
+                onRedo={handleRedo}
                 isRunning={executionState?.status === 'running'}
-                canSave={useCanvasStore(state => state.isDirty)}
+                canSave={isDirty}
+                canUndo={history.canUndo}
+                canRedo={history.canRedo}
             />
             
             {/* 视图切换按钮 */}
