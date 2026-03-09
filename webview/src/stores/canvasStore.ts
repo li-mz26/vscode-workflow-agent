@@ -86,6 +86,15 @@ interface CanvasState {
         logs: Array<{ timestamp: string; level: string; message: string; nodeId?: string }>;
     } | null;
     
+    // Node execution data (input/output from last run)
+    nodeExecutionData: Record<string, {
+        input?: Record<string, any>;
+        output?: Record<string, any>;
+        timestamp?: number;
+        duration?: number;
+        status?: 'success' | 'error' | 'running';
+    }>;
+    
     // History for undo/redo
     history: {
         undoStack: HistoryEntry[];
@@ -129,6 +138,16 @@ interface CanvasState {
     undo: () => void;
     redo: () => void;
     clearHistory: () => void;
+    
+    // Node execution data
+    setNodeExecutionData: (nodeId: string, data: {
+        input?: Record<string, any>;
+        output?: Record<string, any>;
+        timestamp?: number;
+        duration?: number;
+        status?: 'success' | 'error' | 'running';
+    }) => void;
+    clearNodeExecutionData: () => void;
 }
 
 // Deep clone helper
@@ -144,6 +163,7 @@ export const useCanvasStore = create<CanvasState>()(
         selectedNodes: [],
         selectedEdges: [],
         execution: null,
+        nodeExecutionData: {},
         history: { 
             undoStack: [],
             redoStack: [],
@@ -440,6 +460,17 @@ export const useCanvasStore = create<CanvasState>()(
             state.history.redoStack = [];
             state.history.canUndo = false;
             state.history.canRedo = false;
-        })
+        }),
+        
+        // Node execution data
+        setNodeExecutionData: (nodeId, data) => set((state) => {
+            state.nodeExecutionData[nodeId] = {
+                ...state.nodeExecutionData[nodeId],
+                ...data,
+                timestamp: data.timestamp || Date.now()
+            };
+        }),
+        
+        clearNodeExecutionData: () => set({ nodeExecutionData: {} })
     }))
 );

@@ -10,12 +10,15 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
     selectedNodeId,
     onOpenConfig
 }) => {
-    const { workflow, updateNodeData } = useCanvasStore();
-    const [activeTab, setActiveTab] = useState<'properties' | 'settings'>('properties');
+    const { workflow, updateNodeData, nodeExecutionData } = useCanvasStore();
+    const [activeTab, setActiveTab] = useState<'properties' | 'settings' | 'input' | 'output'>('properties');
     
     const node = selectedNodeId 
         ? workflow?.nodes.find(n => n.id === selectedNodeId) 
         : null;
+    
+    // 获取节点执行数据
+    const executionData = selectedNodeId ? nodeExecutionData[selectedNodeId] : null;
     
     if (!node) {
         return (
@@ -38,52 +41,80 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
     // 判断节点是否支持外部配置
     const supportsExternalConfig = ['code', 'switch', 'llm'].includes(node.type);
     
+    // Tab 按钮样式
+    const tabButtonStyle = (tab: typeof activeTab) => ({
+        padding: '4px 10px',
+        border: 'none',
+        background: activeTab === tab 
+            ? 'var(--vscode-list-activeSelectionBackground)' 
+            : 'transparent',
+        color: activeTab === tab 
+            ? 'var(--vscode-list-activeSelectionForeground)'
+            : 'var(--vscode-foreground)',
+        borderRadius: '4px',
+        cursor: 'pointer',
+        fontSize: '11px',
+        fontWeight: activeTab === tab ? 600 : 400,
+        transition: 'all 0.15s ease'
+    });
+    
     return (
         <div style={{
             padding: '16px',
             background: 'var(--vscode-sideBar-background)',
             borderLeft: '1px solid var(--vscode-panel-border)',
             height: '100%',
-            overflow: 'auto'
+            overflow: 'auto',
+            display: 'flex',
+            flexDirection: 'column'
         }}>
             <div style={{
                 display: 'flex',
-                gap: '8px',
+                gap: '4px',
                 marginBottom: '16px',
                 borderBottom: '1px solid var(--vscode-panel-border)',
-                paddingBottom: '8px'
+                paddingBottom: '8px',
+                flexWrap: 'wrap'
             }}>
                 <button
                     onClick={() => setActiveTab('properties')}
-                    style={{
-                        padding: '4px 12px',
-                        border: 'none',
-                        background: activeTab === 'properties' 
-                            ? 'var(--vscode-list-activeSelectionBackground)' 
-                            : 'transparent',
-                        color: 'var(--vscode-foreground)',
-                        borderRadius: '4px',
-                        cursor: 'pointer',
-                        fontSize: '12px'
-                    }}
+                    style={tabButtonStyle('properties')}
                 >
                     属性
                 </button>
                 <button
                     onClick={() => setActiveTab('settings')}
-                    style={{
-                        padding: '4px 12px',
-                        border: 'none',
-                        background: activeTab === 'settings' 
-                            ? 'var(--vscode-list-activeSelectionBackground)' 
-                            : 'transparent',
-                        color: 'var(--vscode-foreground)',
-                        borderRadius: '4px',
-                        cursor: 'pointer',
-                        fontSize: '12px'
-                    }}
+                    style={tabButtonStyle('settings')}
                 >
                     设置
+                </button>
+                <button
+                    onClick={() => setActiveTab('input')}
+                    style={tabButtonStyle('input')}
+                >
+                    输入
+                    {executionData?.input && <span style={{ 
+                        marginLeft: '4px', 
+                        width: '6px', 
+                        height: '6px', 
+                        borderRadius: '50%', 
+                        background: '#4CAF50',
+                        display: 'inline-block'
+                    }} />}
+                </button>
+                <button
+                    onClick={() => setActiveTab('output')}
+                    style={tabButtonStyle('output')}
+                >
+                    输出
+                    {executionData?.output && <span style={{ 
+                        marginLeft: '4px', 
+                        width: '6px', 
+                        height: '6px', 
+                        borderRadius: '50%', 
+                        background: '#2196F3',
+                        display: 'inline-block'
+                    }} />}
                 </button>
             </div>
             
@@ -160,7 +191,6 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
                             }}
                         />
                     </div>
-                    
                     <div>
                         <label style={{
                             display: 'block',
@@ -308,7 +338,8 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
                                 background: 'var(--vscode-textCodeBlock-background)',
                                 borderRadius: '4px',
                                 fontSize: '12px'
-                            }}>
+                            }}
+                            >
                                 {(node.data.conditions?.length || 0) + 1} 个分支
                             </div>
                         </div>
@@ -386,6 +417,162 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
                             <span>X: {Math.round(node.position.x)}</span>
                             <span>Y: {Math.round(node.position.y)}</span>
                         </div>
+                    </div>
+                </div>
+            )}
+            
+            {activeTab === 'input' && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                    <div>
+                        <label style={{
+                            display: 'block',
+                            fontSize: '11px',
+                            color: 'var(--vscode-descriptionForeground)',
+                            marginBottom: '4px',
+                            textTransform: 'uppercase'
+                        }}>
+                            最近运行的输入
+                        </label>
+                        
+                        {executionData?.input ? (
+                            <div>
+                                <pre style={{
+                                    padding: '10px',
+                                    background: 'var(--vscode-textCodeBlock-background)',
+                                    border: '1px solid var(--vscode-panel-border)',
+                                    borderRadius: '4px',
+                                    fontSize: '11px',
+                                    fontFamily: 'monospace',
+                                    color: 'var(--vscode-textCodeBlock-foreground)',
+                                    overflow: 'auto',
+                                    maxHeight: '300px',
+                                    whiteSpace: 'pre-wrap',
+                                    wordBreak: 'break-word'
+                                }}
+                                >
+                                    {JSON.stringify(executionData.input, null, 2)}
+                                </pre>
+                                
+                                {executionData.timestamp && (
+                                    <p style={{
+                                        fontSize: '10px',
+                                        color: 'var(--vscode-descriptionForeground)',
+                                        marginTop: '8px'
+                                    }}>
+                                        运行时间: {new Date(executionData.timestamp).toLocaleString()}
+                                    </p>
+                                )}
+                            </div>
+                        ) : (
+                            <div style={{
+                                padding: '20px',
+                                textAlign: 'center',
+                                color: 'var(--vscode-descriptionForeground)',
+                                fontSize: '12px',
+                                background: 'var(--vscode-textCodeBlock-background)',
+                                borderRadius: '4px'
+                            }}>
+                                <p>暂无输入数据</p>
+                                <p style={{ fontSize: '11px', marginTop: '4px' }}>
+                                    运行工作流后查看节点输入
+                                </p>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            )}
+            
+            {activeTab === 'output' && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                    <div>
+                        <label style={{
+                            display: 'block',
+                            fontSize: '11px',
+                            color: 'var(--vscode-descriptionForeground)',
+                            marginBottom: '4px',
+                            textTransform: 'uppercase'
+                        }}>
+                            最近运行的输出
+                        </label>
+                        
+                        {executionData?.output ? (
+                            <div>
+                                {executionData.status && (
+                                    <div style={{
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        gap: '6px',
+                                        padding: '4px 10px',
+                                        borderRadius: '4px',
+                                        fontSize: '11px',
+                                        fontWeight: 600,
+                                        marginBottom: '8px',
+                                        background: executionData.status === 'success' 
+                                            ? 'rgba(76, 175, 80, 0.2)'
+                                            : executionData.status === 'error'
+                                                ? 'rgba(244, 67, 54, 0.2)'
+                                                : 'rgba(33, 150, 243, 0.2)',
+                                        color: executionData.status === 'success'
+                                            ? '#4CAF50'
+                                            : executionData.status === 'error'
+                                                ? '#F44336'
+                                                : '#2196F3'
+                                    }}
+                                    >
+                                        <span>
+                                            {executionData.status === 'success' && '✓ 成功'}
+                                            {executionData.status === 'error' && '✗ 失败'}
+                                            {executionData.status === 'running' && '▶ 运行中'}
+                                        </span>                                        
+                                        {executionData.duration !== undefined && (
+                                            <span>{executionData.duration}ms</span>
+                                        )}
+                                    </div>
+                                )}
+                                
+                                <pre style={{
+                                    padding: '10px',
+                                    background: 'var(--vscode-textCodeBlock-background)',
+                                    border: '1px solid var(--vscode-panel-border)',
+                                    borderRadius: '4px',
+                                    fontSize: '11px',
+                                    fontFamily: 'monospace',
+                                    color: 'var(--vscode-textCodeBlock-foreground)',
+                                    overflow: 'auto',
+                                    maxHeight: '300px',
+                                    whiteSpace: 'pre-wrap',
+                                    wordBreak: 'break-word'
+                                }}
+                                >
+                                    {JSON.stringify(executionData.output, null, 2)}
+                                </pre>
+                                
+                                {executionData.timestamp && (
+                                    <p style={{
+                                        fontSize: '10px',
+                                        color: 'var(--vscode-descriptionForeground)',
+                                        marginTop: '8px'
+                                    }}>
+                                        运行时间: {new Date(executionData.timestamp).toLocaleString()}
+                                    </p>
+                                )}
+                            </div>
+                        ) : (
+                            <div style={{
+                                padding: '20px',
+                                textAlign: 'center',
+                                color: 'var(--vscode-descriptionForeground)',
+                                fontSize: '12px',
+                                background: 'var(--vscode-textCodeBlock-background)',
+                                borderRadius: '4px'
+                            }}
+                            >
+                                <p>暂无输出数据</p>
+                                <p style={{ fontSize: '11px', marginTop: '4px' }}>
+                                    运行工作流后查看节点输出
+                                </p>
+                            </div>
+                        )}
                     </div>
                 </div>
             )}

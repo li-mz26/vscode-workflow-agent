@@ -15,6 +15,9 @@ interface NodeExecutionState {
     status: 'idle' | 'running' | 'success' | 'error';
     startTime?: number;
     endTime?: number;
+    input?: Record<string, any>;
+    output?: Record<string, any>;
+    duration?: number;
 }
 
 interface WorkflowExecutionState {
@@ -46,7 +49,9 @@ function App() {
         undo,
         redo,
         history,
-        isDirty
+        isDirty,
+        setNodeExecutionData,
+        clearNodeExecutionData
     } = useCanvasStore();
     
     const deleteZoneRef = useRef<HTMLDivElement>(null);
@@ -72,6 +77,24 @@ function App() {
                     break;
                 case 'execution:state':
                     setExecutionState(message.payload);
+                    // 存储节点执行数据（输入输出）
+                    if (message.payload?.nodeStates) {
+                        message.payload.nodeStates.forEach((nodeState: NodeExecutionState & { input?: any; output?: any; duration?: number }) => {
+                            if (nodeState.status === 'success' || nodeState.status === 'error') {
+                                setNodeExecutionData(nodeState.nodeId, {
+                                    status: nodeState.status,
+                                    input: nodeState.input,
+                                    output: nodeState.output,
+                                    duration: nodeState.duration,
+                                    timestamp: Date.now()
+                                });
+                            }
+                        });
+                    }
+                    break;
+                case 'execution:started':
+                    // 开始新执行时清除旧的执行数据
+                    clearNodeExecutionData();
                     break;
             }
         };
