@@ -74,16 +74,14 @@ export const NodeComponent: React.FC<NodeComponentProps> = ({
         const deltaY = e.clientY - lastPosRef.current.y;
 
         if (!dragStartedRef.current) {
-            if (Math.abs(deltaX) > 3 || Math.abs(deltaY) > 3) {
-                dragStartedRef.current = true;
-                onDragStart?.(node.id);
-            }
+            // 移除 3px 阈值，立即开始拖拽
+            dragStartedRef.current = true;
+            console.log('[NodeComponent] Drag start:', node.id);
+            onDragStart?.(node.id);
         }
 
-        if (dragStartedRef.current) {
-            onDragMove?.(node.id, e.clientX, e.clientY);
-            onDrag(node.id, { x: deltaX, y: deltaY });
-        }
+        onDragMove?.(node.id, e.clientX, e.clientY);
+        onDrag(node.id, { x: deltaX, y: deltaY });
 
         lastPosRef.current.x = e.clientX;
         lastPosRef.current.y = e.clientY;
@@ -91,11 +89,13 @@ export const NodeComponent: React.FC<NodeComponentProps> = ({
     
     const handleMouseUp = (e: MouseEvent) => {
         const wasDragging = dragStartedRef.current;
+        console.log('[NodeComponent] Mouse up, wasDragging:', wasDragging, 'nodeId:', node.id);
         cleanup();
         forceUpdate();
         
         // 如果确实开始拖动了，通知拖动结束（用于删除区域检测）
         if (wasDragging) {
+            console.log('[NodeComponent] Calling onDragEnd with clientX:', e.clientX, 'clientY:', e.clientY);
             onDragEnd?.(node.id, e.clientX, e.clientY);
         }
     };

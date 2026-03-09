@@ -151,6 +151,7 @@ function App() {
 
     // Handle existing node drag start
     const handleNodeDragStartFromCanvas = useCallback((nodeId: string) => {
+        console.log('[App] Drag start from canvas:', nodeId);
         setDraggedNodeId(nodeId);
         (window as any).__isNewNode = false;
     }, []);
@@ -158,6 +159,7 @@ function App() {
     // Handle drag over delete zone
     const handleDeleteZoneDragOver = useCallback((e: React.DragEvent) => {
         e.preventDefault();
+        console.log('[App] Delete zone drag over, draggedNodeId:', draggedNodeId);
         if (draggedNodeId) {
             setIsDeleteZoneActive(true);
         }
@@ -166,6 +168,7 @@ function App() {
     // Handle drag leave delete zone
     const handleDeleteZoneDragLeave = useCallback((e: React.DragEvent) => {
         e.preventDefault();
+        console.log('[App] Delete zone drag leave');
         setIsDeleteZoneActive(false);
     }, []);
 
@@ -173,17 +176,22 @@ function App() {
     const handleDeleteZoneDrop = useCallback((e: React.DragEvent) => {
         e.preventDefault();
         e.stopPropagation();
+        console.log('[App] Delete zone drop, draggedNodeId:', draggedNodeId, 'isNewNode:', (window as any).__isNewNode);
         
         // 只处理从画布拖拽的节点，不处理从 palette 拖拽的新节点
         const isNewNode = (window as any).__isNewNode;
         if (isNewNode) {
+            console.log('[App] New node dropped on delete zone, ignoring');
             // 新节点拖到删除区，不删除，但阻止事件传播
             return;
         }
         
+        console.log('[App] Attempting to delete node:', draggedNodeId, 'workflow exists:', !!workflow);
         if (draggedNodeId && workflow) {
             const node = workflow.nodes.find(n => n.id === draggedNodeId);
+            console.log('[App] Found node:', node?.id, 'node type:', node?.type);
             if (node) {
+                console.log('[App] Calling deleteNode for:', draggedNodeId);
                 deleteNode(draggedNodeId);
                 vscode.postMessage({
                     type: 'node:delete',
@@ -193,6 +201,7 @@ function App() {
                         nodeType: node.type
                     }
                 });
+                console.log('[App] Node deleted and message sent');
             }
         }
         setIsDeleteZoneActive(false);
@@ -433,6 +442,7 @@ function App() {
                                 onNodeDragEnd={(nodeId, clientX, clientY) => {
                                     // 删除逻辑统一由删除区域的 onDrop 处理
                                     // 这里只清理状态
+                                    console.log('[App] onNodeDragEnd, nodeId:', nodeId, 'clientX:', clientX, 'clientY:', clientY);
                                     setIsDeleteZoneActive(false);
                                     setDraggedNodeId(null);
                                     delete (window as any).__isNewNode;
