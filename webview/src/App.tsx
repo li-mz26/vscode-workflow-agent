@@ -455,23 +455,28 @@ function App() {
 
                                         if (isInDeleteZone) {
                                             // 使用 getState 获取最新状态和函数
-                                            const currentState = useCanvasStore.getState();
-                                            console.log('[App] Current workflow exists:', !!currentState.workflow);
-                                            if (currentState.workflow) {
-                                                const node = currentState.workflow.nodes.find(n => n.id === nodeId);
-                                                console.log('[App] Found node for deletion:', node?.id);
+                                            const store = useCanvasStore.getState();
+                                            console.log('[App] Current workflow exists:', !!store.workflow);
+                                            if (store.workflow) {
+                                                const node = store.workflow.nodes.find(n => n.id === nodeId);
+                                                console.log('[App] Found node for deletion:', node?.id, 'total nodes:', store.workflow.nodes.length);
                                                 if (node) {
                                                     console.log('[App] Deleting node:', nodeId);
-                                                    currentState.deleteNode(nodeId);
+                                                    store.deleteNode(nodeId);
+                                                    
+                                                    // deleteNode 后重新获取更新后的状态
+                                                    const updatedStore = useCanvasStore.getState();
+                                                    console.log('[App] After delete, nodes count:', updatedStore.workflow?.nodes.length);
+                                                    
                                                     vscode.postMessage({
                                                         type: 'node:delete',
                                                         payload: {
-                                                            workflow: currentState.workflow,
+                                                            workflow: updatedStore.workflow,
                                                             nodeId,
                                                             nodeType: node.type
                                                         }
                                                     });
-                                                    console.log('[App] Delete message sent');
+                                                    console.log('[App] Delete message sent with updated workflow');
                                                 }
                                             }
                                         }
