@@ -172,12 +172,15 @@ function App() {
     // Handle drop on delete zone
     const handleDeleteZoneDrop = useCallback((e: React.DragEvent) => {
         e.preventDefault();
+        e.stopPropagation();
+        
         // 只处理从画布拖拽的节点，不处理从 palette 拖拽的新节点
         const isNewNode = (window as any).__isNewNode;
         if (isNewNode) {
-            // 新节点拖到删除区，不处理，让事件继续传播
+            // 新节点拖到删除区，不删除，但阻止事件传播
             return;
         }
+        
         if (draggedNodeId && workflow) {
             const node = workflow.nodes.find(n => n.id === draggedNodeId);
             if (node) {
@@ -428,31 +431,11 @@ function App() {
                                     }
                                 }}
                                 onNodeDragEnd={(nodeId, clientX, clientY) => {
-                                    if (deleteZoneRef.current) {
-                                        const rect = deleteZoneRef.current.getBoundingClientRect();
-                                        const isInDeleteZone =
-                                            clientX >= rect.left &&
-                                            clientX <= rect.right &&
-                                            clientY >= rect.top &&
-                                            clientY <= rect.bottom;
-                                        
-                                        if (isInDeleteZone && workflow) {
-                                            const node = workflow.nodes.find(n => n.id === nodeId);
-                                            if (node) {
-                                                deleteNode(nodeId);
-                                                vscode.postMessage({
-                                                    type: 'node:delete',
-                                                    payload: {
-                                                        workflow,
-                                                        nodeId,
-                                                        nodeType: node.type
-                                                    }
-                                                });
-                                            }
-                                        }
-                                    }
+                                    // 删除逻辑统一由删除区域的 onDrop 处理
+                                    // 这里只清理状态
                                     setIsDeleteZoneActive(false);
                                     setDraggedNodeId(null);
+                                    delete (window as any).__isNewNode;
                                 }}
                                 executionState={executionState}
                             />
