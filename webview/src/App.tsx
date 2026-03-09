@@ -201,34 +201,36 @@ function App() {
     const handleCanvasDrop = useCallback((e: React.DragEvent) => {
         e.preventDefault();
         e.stopPropagation();
-        
+
         const type = (window as any).__draggedNodeType;
         const isNewNode = (window as any).__isNewNode;
-        
+
         // 如果是从画布拖拽的节点，不做处理（已由 delete zone 处理）
         if (!isNewNode) {
             setDraggedNodeId(null);
             delete (window as any).__isNewNode;
             return;
         }
-        
+
         if (!type) return;
-        
+
         const rect = e.currentTarget.getBoundingClientRect();
         const x = (e.clientX - rect.left - 100);
         const y = (e.clientY - rect.top - 40);
-        
+
         const node = nodeRegistry.createNode(type, { x, y });
-        
-        // 使用 getState 获取最新的 workflow，避免闭包问题
-        const currentWorkflow = useCanvasStore.getState().workflow;
+
+        // 先添加节点到 store
         addNode(node);
-        
+
+        // 再获取包含新节点的最新 workflow 状态
+        const updatedWorkflow = useCanvasStore.getState().workflow;
+
         vscode.postMessage({
             type: 'node:add',
-            payload: { workflow: currentWorkflow, node }
+            payload: { workflow: updatedWorkflow, node }
         });
-        
+
         delete (window as any).__draggedNodeType;
         delete (window as any).__isNewNode;
     }, [addNode]);
