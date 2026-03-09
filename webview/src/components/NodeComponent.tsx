@@ -19,6 +19,48 @@ const NODE_HEADER_HEIGHT = 32;
 const PORT_RADIUS = 6;
 const PORT_SPACING = 24;
 
+// 节点类型颜色映射
+const NODE_TYPE_COLORS: Record<string, string> = {
+    start: '#4CAF50',      // 绿色
+    end: '#F44336',        // 红色
+    code: '#2196F3',       // 蓝色
+    llm: '#9C27B0',        // 紫色
+    switch: '#FF9800',     // 橙色
+    parallel: '#00BCD4',   // 青色
+    merge: '#795548',      // 棕色
+    http: '#607D8B',       // 蓝灰色
+    webhook: '#E91E63',    // 粉红色
+    schedule: '#FF5722',   // 深橙色
+};
+
+// 根据节点类型获取颜色
+function getNodeColor(type: string): string {
+    return NODE_TYPE_COLORS[type] || '#666';
+}
+
+// 根据节点类型获取显示名称
+function getNodeTitle(node: NodeData): string {
+    // 优先使用 metadata 中的名称，否则根据类型映射
+    if (node.metadata?.name) {
+        return node.metadata.name;
+    }
+    
+    const typeNames: Record<string, string> = {
+        start: 'Start',
+        end: 'End',
+        code: 'Code',
+        llm: 'LLM',
+        switch: 'Switch',
+        parallel: 'Parallel',
+        merge: 'Merge',
+        http: 'HTTP Request',
+        webhook: 'Webhook',
+        schedule: 'Schedule',
+    };
+    
+    return typeNames[node.type] || node.type;
+}
+
 export const NodeComponent: React.FC<NodeComponentProps> = ({
     node,
     selected,
@@ -35,8 +77,9 @@ export const NodeComponent: React.FC<NodeComponentProps> = ({
     const dragStartedRef = useRef(false);
     const lastPosRef = useRef({ x: 0, y: 0 });
     
-    const color = node.metadata?.color || '#666';
-    const title = node.metadata?.name || node.type;
+    // 根据节点类型获取颜色和标题
+    const color = getNodeColor(node.type);
+    const title = getNodeTitle(node);
     
     const nodeHeight = Math.max(
         80,
