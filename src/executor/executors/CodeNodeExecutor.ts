@@ -9,14 +9,15 @@ export class CodeNodeExecutor extends NodeExecutorBase {
     type = 'code';
 
     async execute(node: NodeConfig, context: ExecutionContext): Promise<NodeExecutionResult> {
-        const { code, timeout = 30 } = node.data;
+        const data = node.data || {};
+        const { code, timeout = 30 } = data;
         const inputs = this.resolveInputs(node, context);
 
         try {
             // 这里应该调用 Python 沙箱执行
             // 暂时使用模拟实现
             const result = await this.executePython(code, inputs, timeout);
-            
+
             return {
                 success: true,
                 outputs: { output: result },
@@ -32,8 +33,8 @@ export class CodeNodeExecutor extends NodeExecutorBase {
     }
 
     private async executePython(
-        code: string, 
-        inputs: Record<string, any>, 
+        code: string,
+        inputs: Record<string, any>,
         timeout: number
     ): Promise<any> {
         // TODO: 集成 Python 沙箱 (Pyodide 或子进程)

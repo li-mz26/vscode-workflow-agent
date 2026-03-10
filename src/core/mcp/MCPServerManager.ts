@@ -3,6 +3,7 @@ import { Workflow, NodeConfig, Edge, ExecutionResult } from '../../shared/types'
 import { ExecutionEngine } from '../execution/ExecutionEngine';
 import { NodeRegistry } from '../node/NodeRegistry';
 import * as vscode from 'vscode';
+import * as path from 'path';
 
 /**
  * MCP 工具属性定义接口
@@ -868,11 +869,18 @@ export class MCPServerManager {
             throw new Error(`工作流未找到: ${workflowId}`);
         }
 
-        const engine = new ExecutionEngine(workflow);
+        // 获取工作流目录（用于加载外部配置）
+        const workflowDir = workflow.filePath ? path.dirname(workflow.filePath) : process.cwd();
+
+        const engine = new ExecutionEngine(workflow, workflowDir);
         this.executionEngines.set(workflowId, engine);
         this.activeExecutions.set(workflowId, { workflowId, startTime: new Date() });
 
         const result = await engine.start(inputs);
+
+        // 执行完成后清理
+        this.executionEngines.delete(workflowId);
+        this.activeExecutions.delete(workflowId);
 
         return {
             executionId: workflowId,

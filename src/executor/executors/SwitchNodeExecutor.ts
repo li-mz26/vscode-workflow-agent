@@ -9,7 +9,8 @@ export class SwitchNodeExecutor extends NodeExecutorBase {
     type = 'switch';
 
     async execute(node: NodeConfig, context: ExecutionContext): Promise<NodeExecutionResult> {
-        const { conditions = [], defaultTarget = 'default' } = node.data;
+        const data = node.data || {};
+        const { conditions = [], defaultTarget = 'default' } = data;
         const input = context.inputs['input'];
 
         for (const condition of conditions) {
@@ -34,8 +35,8 @@ export class SwitchNodeExecutor extends NodeExecutorBase {
     }
 
     private evaluateCondition(
-        expression: string, 
-        input: any, 
+        expression: string,
+        input: any,
         context: ExecutionContext
     ): boolean {
         // 安全的表达式求值

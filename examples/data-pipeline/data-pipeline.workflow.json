@@ -1,0 +1,163 @@
+{
+  "id": "wf_data_pipeline_001",
+  "name": "data-pipeline",
+  "description": "数据处理流水线示例 - 从API获取数据，使用LLM分析，根据结果分支处理",
+  "version": "1.0.0",
+  "nodes": [
+    {
+      "id": "node_start_001",
+      "type": "start",
+      "position": { "x": 100, "y": 300 },
+      "configRef": "nodes/start_001.json",
+      "inputs": [],
+      "outputs": [
+        { "id": "trigger", "name": "trigger", "type": "data", "dataType": "object", "required": true }
+      ],
+      "metadata": {
+        "name": "开始",
+        "description": "工作流入口",
+        "icon": "play",
+        "color": "#4CAF50"
+      }
+    },
+    {
+      "id": "node_code_002",
+      "type": "code",
+      "position": { "x": 300, "y": 300 },
+      "configRef": "nodes/code_002.py",
+      "inputs": [
+        { "id": "input", "name": "input", "type": "data", "dataType": "any", "required": false }
+      ],
+      "outputs": [
+        { "id": "output", "name": "output", "type": "data", "dataType": "any", "required": true }
+      ],
+      "metadata": {
+        "name": "获取数据",
+        "description": "从数据源获取原始数据",
+        "icon": "code",
+        "color": "#2196F3"
+      }
+    },
+    {
+      "id": "node_llm_003",
+      "type": "llm",
+      "position": { "x": 550, "y": 300 },
+      "configRef": "nodes/llm_003.json",
+      "inputs": [
+        { "id": "prompt", "name": "prompt", "type": "data", "dataType": "string", "required": true }
+      ],
+      "outputs": [
+        { "id": "content", "name": "content", "type": "data", "dataType": "string", "required": true },
+        { "id": "usage", "name": "usage", "type": "data", "dataType": "object", "required": true }
+      ],
+      "metadata": {
+        "name": "智能分析",
+        "description": "使用LLM分析数据",
+        "icon": "sparkle",
+        "color": "#9C27B0"
+      }
+    },
+    {
+      "id": "node_switch_004",
+      "type": "switch",
+      "position": { "x": 800, "y": 300 },
+      "configRef": "nodes/switch_004.json",
+      "inputs": [
+        { "id": "input", "name": "input", "type": "data", "dataType": "any", "required": true }
+      ],
+      "outputs": [],
+      "metadata": {
+        "name": "条件分支",
+        "description": "根据分析结果选择处理路径",
+        "icon": "split-horizontal",
+        "color": "#FF9800"
+      }
+    },
+    {
+      "id": "node_http_005",
+      "type": "http",
+      "position": { "x": 1050, "y": 150 },
+      "configRef": "nodes/http_005.json",
+      "inputs": [
+        { "id": "input", "name": "input", "type": "data", "dataType": "any", "required": false }
+      ],
+      "outputs": [
+        { "id": "status", "name": "status", "type": "data", "dataType": "number", "required": true },
+        { "id": "body", "name": "body", "type": "data", "dataType": "string", "required": true }
+      ],
+      "metadata": {
+        "name": "发送通知",
+        "description": "发送高优先级通知",
+        "icon": "globe",
+        "color": "#607D8B"
+      }
+    },
+    {
+      "id": "node_end_006",
+      "type": "end",
+      "position": { "x": 1300, "y": 300 },
+      "configRef": "nodes/end_006.json",
+      "inputs": [
+        { "id": "result", "name": "result", "type": "data", "dataType": "any", "required": false }
+      ],
+      "outputs": [],
+      "metadata": {
+        "name": "结束",
+        "description": "工作流出口",
+        "icon": "stop",
+        "color": "#F44336"
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "edge_001",
+      "source": { "nodeId": "node_start_001", "portId": "trigger" },
+      "target": { "nodeId": "node_code_002", "portId": "input" }
+    },
+    {
+      "id": "edge_002",
+      "source": { "nodeId": "node_code_002", "portId": "output" },
+      "target": { "nodeId": "node_llm_003", "portId": "prompt" }
+    },
+    {
+      "id": "edge_003",
+      "source": { "nodeId": "node_llm_003", "portId": "content" },
+      "target": { "nodeId": "node_switch_004", "portId": "input" }
+    },
+    {
+      "id": "edge_004",
+      "source": { "nodeId": "node_switch_004", "portId": "high" },
+      "target": { "nodeId": "node_http_005", "portId": "input" }
+    },
+    {
+      "id": "edge_005",
+      "source": { "nodeId": "node_switch_004", "portId": "low" },
+      "target": { "nodeId": "node_end_006", "portId": "result" }
+    },
+    {
+      "id": "edge_006",
+      "source": { "nodeId": "node_http_005", "portId": "body" },
+      "target": { "nodeId": "node_end_006", "portId": "result" }
+    }
+  ],
+  "variables": [
+    {
+      "name": "apiEndpoint",
+      "type": "string",
+      "defaultValue": "https://api.example.com/data",
+      "description": "数据API端点"
+    }
+  ],
+  "settings": {
+    "timeout": 300,
+    "logLevel": "info",
+    "retryPolicy": {
+      "maxRetries": 3,
+      "retryDelay": 1000,
+      "exponentialBackoff": true
+    }
+  },
+  "createdAt": "2024-03-10T10:00:00.000Z",
+  "updatedAt": "2024-03-10T12:30:00.000Z"
+}

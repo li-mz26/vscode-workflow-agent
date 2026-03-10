@@ -1,17 +1,22 @@
-import { NodeConfig, ExecutionContext, NodeExecutionResult, ValidationResult } from '../../../shared/types/index';
-import { NodeExecutor } from './NodeExecutorFactory';
+// ============================================
+// Executor 层 - Schedule 节点执行器
+// ============================================
 
-export class ScheduleNodeExecutor extends NodeExecutor {
+import { NodeConfig, ExecutionContext, NodeExecutionResult, ValidationResult } from '../../domain';
+import { NodeExecutorBase } from '../NodeExecutorBase';
+
+export class ScheduleNodeExecutor extends NodeExecutorBase {
     type = 'schedule';
 
     async execute(node: NodeConfig, context: ExecutionContext): Promise<NodeExecutionResult> {
+        const data = node.data || {};
         const {
             cronExpression,
             timezone = 'UTC',
             enabled = true,
             maxRuns,
             endDate
-        } = node.data;
+        } = data;
 
         if (!cronExpression) {
             return { success: false, error: new Error('Cron expression is required') };
@@ -58,7 +63,7 @@ export class ScheduleNodeExecutor extends NodeExecutor {
 
     validate(config: Record<string, any>): ValidationResult {
         const errors: string[] = [];
-        
+
         if (!config.cronExpression) {
             errors.push('Cron expression is required');
         } else if (!this.isValidCron(config.cronExpression)) {

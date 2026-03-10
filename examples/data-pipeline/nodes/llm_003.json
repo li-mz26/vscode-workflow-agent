@@ -1,0 +1,15 @@
+{
+  "model": "gpt-4",
+  "systemPrompt": "你是一个数据分析专家，负责分析数据并给出评估结果。\n\n请根据输入数据，分析其内容并返回JSON格式的评估结果：\n{\n  \"priority\": \"high\" | \"medium\" | \"low\",\n  \"summary\": \"数据摘要描述\",\n  \"recommendations\": [\"建议1\", \"建议2\"],\n  \"score\": 0-100的评分\n}",
+  "userPrompt": "请分析以下数据：\n\n{{input}}",
+  "temperature": 0.7,
+  "maxTokens": 1000,
+  "variables": [
+    {
+      "name": "input",
+      "source": "node_code_002.output",
+      "required": true
+    }
+  ],
+  "description": "使用LLM智能分析数据"
+}

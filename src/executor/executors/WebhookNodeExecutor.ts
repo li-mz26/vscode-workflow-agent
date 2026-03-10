@@ -1,10 +1,15 @@
-import { NodeConfig, ExecutionContext, NodeExecutionResult, ValidationResult } from '../../../shared/types/index';
-import { NodeExecutor } from './NodeExecutorFactory';
+// ============================================
+// Executor 层 - Webhook 节点执行器
+// ============================================
 
-export class WebhookNodeExecutor extends NodeExecutor {
+import { NodeConfig, ExecutionContext, NodeExecutionResult, ValidationResult } from '../../domain';
+import { NodeExecutorBase } from '../NodeExecutorBase';
+
+export class WebhookNodeExecutor extends NodeExecutorBase {
     type = 'webhook';
 
     async execute(node: NodeConfig, context: ExecutionContext): Promise<NodeExecutionResult> {
+        const data = node.data || {};
         const {
             provider = 'generic',
             webhookUrl,
@@ -13,7 +18,7 @@ export class WebhookNodeExecutor extends NodeExecutor {
             severity = 'info',
             fields = [],
             mentions = []
-        } = node.data;
+        } = data;
 
         if (!webhookUrl) {
             return { success: false, error: new Error('Webhook URL is required') };
@@ -86,7 +91,7 @@ export class WebhookNodeExecutor extends NodeExecutor {
 
     private buildSlackPayload(options: any): any {
         const { title, message, severity, fields, mentions } = options;
-        
+
         const colorMap: Record<string, string> = {
             info: '#36a64f',
             warning: '#ff9900',
@@ -113,13 +118,6 @@ export class WebhookNodeExecutor extends NodeExecutor {
 
     private buildDingTalkPayload(options: any): any {
         const { title, message, severity, fields } = options;
-        
-        const colorMap: Record<string, string> = {
-            info: '#00ff00',
-            warning: '#ff9900',
-            error: '#ff0000',
-            critical: '#990000'
-        };
 
         const text = fields.map((f: any) => `**${f.name}**: ${f.value}`).join('\n');
 
@@ -134,7 +132,7 @@ export class WebhookNodeExecutor extends NodeExecutor {
 
     private buildDiscordPayload(options: any): any {
         const { title, message, severity, fields } = options;
-        
+
         const colorMap: Record<string, number> = {
             info: 3066993,
             warning: 15105570,
@@ -159,7 +157,7 @@ export class WebhookNodeExecutor extends NodeExecutor {
 
     private buildPagerDutyPayload(options: any): any {
         const { title, message, severity, fields } = options;
-        
+
         return {
             payload: {
                 summary: title,
@@ -175,11 +173,11 @@ export class WebhookNodeExecutor extends NodeExecutor {
 
     validate(config: Record<string, any>): ValidationResult {
         const errors: string[] = [];
-        
+
         if (!config.webhookUrl) {
             errors.push('Webhook URL is required');
         }
-        
+
         if (!config.message) {
             errors.push('Message is required');
         }

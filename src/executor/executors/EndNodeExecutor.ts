@@ -9,8 +9,9 @@ export class EndNodeExecutor extends NodeExecutorBase {
     type = 'end';
 
     async execute(node: NodeConfig, context: ExecutionContext): Promise<NodeExecutionResult> {
-        const { outputMapping = {} } = node.data;
-        
+        const data = node.data || {};
+        const { outputMapping = {} } = data;
+
         const outputs: Record<string, any> = {};
         for (const [key, path] of Object.entries(outputMapping)) {
             outputs[key] = this.resolvePath(path as string, context);

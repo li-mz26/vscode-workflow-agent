@@ -9,8 +9,9 @@ export class MergeNodeExecutor extends NodeExecutorBase {
     type = 'merge';
 
     async execute(node: NodeConfig, context: ExecutionContext): Promise<NodeExecutionResult> {
-        const { strategy = 'all' } = node.data;
-        
+        const data = node.data || {};
+        const { strategy = 'all' } = data;
+
         // 收集所有输入
         const inputs: Record<string, any> = {};
         for (const [key, value] of Object.entries(context.inputs)) {

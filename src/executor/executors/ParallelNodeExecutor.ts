@@ -9,8 +9,9 @@ export class ParallelNodeExecutor extends NodeExecutorBase {
     type = 'parallel';
 
     async execute(node: NodeConfig, context: ExecutionContext): Promise<NodeExecutionResult> {
-        const { branches = [] } = node.data;
-        
+        const data = node.data || {};
+        const { branches = [] } = data;
+
         // Parallel 节点只是标记，实际并行由执行引擎调度
         return {
             success: true,

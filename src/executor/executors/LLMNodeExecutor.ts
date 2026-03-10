@@ -9,19 +9,20 @@ export class LLMNodeExecutor extends NodeExecutorBase {
     type = 'llm';
 
     async execute(node: NodeConfig, context: ExecutionContext): Promise<NodeExecutionResult> {
-        const { 
-            model, 
-            prompt: promptTemplate, 
+        const data = node.data || {};
+        const {
+            model,
+            prompt: promptTemplate,
             systemPrompt: systemTemplate,
-            temperature = 0.7, 
-            maxTokens = 2000 
-        } = node.data;
+            temperature = 0.7,
+            maxTokens = 2000
+        } = data;
 
         const inputs = this.resolveInputs(node, context);
 
         try {
             // 渲染模板
-            const prompt = this.renderTemplateWithInputs(promptTemplate, inputs, context);
+            const prompt = promptTemplate ? this.renderTemplateWithInputs(promptTemplate, inputs, context) : '';
             const system = systemTemplate ? this.renderTemplateWithInputs(systemTemplate, inputs, context) : undefined;
 
             // TODO: 调用实际的 LLM API
@@ -44,8 +45,8 @@ export class LLMNodeExecutor extends NodeExecutorBase {
     }
 
     private renderTemplateWithInputs(
-        template: string, 
-        inputs: Record<string, any>, 
+        template: string,
+        inputs: Record<string, any>,
         context: ExecutionContext
     ): string {
         // 简单的模板替换: {{variable}} 或 {{ctx.variable}}

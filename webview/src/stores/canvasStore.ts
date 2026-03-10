@@ -24,7 +24,7 @@ export interface NodeData {
     type: string;
     position: Position;
     size?: Size;
-    data: Record<string, any>;
+    data?: Record<string, any>;
     inputs: Port[];
     outputs: Port[];
     metadata?: {
@@ -33,6 +33,7 @@ export interface NodeData {
         icon?: string;
         color?: string;
     };
+    configRef?: string;
 }
 
 export interface EdgeData {
@@ -252,8 +253,8 @@ export const useCanvasStore = create<CanvasState>()(
                 state.history.redoStack = [];
                 state.history.canUndo = true;
                 state.history.canRedo = false;
-                
-                Object.assign(node.data, data);
+
+                node.data = { ...node.data, ...data };
                 state.isDirty = true;
             }
         }),

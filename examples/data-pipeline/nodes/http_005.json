@@ -1,0 +1,22 @@
+{
+  "method": "POST",
+  "url": "https://hooks.slack.com/services/YOUR/WEBHOOK/URL",
+  "headers": {
+    "Content-Type": "application/json"
+  },
+  "body": {
+    "text": "🚨 高优先级告警",
+    "blocks": [
+      {
+        "type": "section",
+        "text": {
+          "type": "mrkdwn",
+          "text": "*数据分析结果*\n优先级: 高\n评分: {{input.score}}"
+        }
+      }
+    ]
+  },
+  "timeout": 10000,
+  "retryCount": 3,
+  "description": "发送高优先级通知到Slack"
+}

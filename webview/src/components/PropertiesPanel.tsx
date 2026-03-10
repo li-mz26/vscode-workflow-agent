@@ -231,7 +231,7 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
                                 Python 代码（预览）
                             </label>
                             <textarea
-                                value={typeof node.data.code === 'string' 
+                                value={typeof node.data?.code === 'string'
                                     ? node.data.code.slice(0, 200) + (node.data.code.length > 200 ? '...' : '')
                                     : ''
                                 }
@@ -273,7 +273,7 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
                                     模型
                                 </label>
                                 <select
-                                    value={node.data.model || 'gpt-4'}
+                                    value={node.data?.model || 'gpt-4'}
                                     onChange={(e) => handleDataChange('model', e.target.value)}
                                     style={{
                                         width: '100%',
@@ -307,7 +307,7 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
                                     min="0"
                                     max="2"
                                     step="0.1"
-                                    value={node.data.temperature || 0.7}
+                                    value={node.data?.temperature || 0.7}
                                     onChange={(e) => handleDataChange('temperature', parseFloat(e.target.value))}
                                     style={{ width: '100%' }}
                                 />
@@ -315,7 +315,7 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
                                     fontSize: '11px',
                                     color: 'var(--vscode-foreground)'
                                 }}>
-                                    {node.data.temperature || 0.7}
+                                    {node.data?.temperature || 0.7}
                                 </span>
                             </div>
                         </>
@@ -340,7 +340,7 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
                                 fontSize: '12px'
                             }}
                             >
-                                {(node.data.conditions?.length || 0) + 1} 个分支
+                                {(node.data?.conditions?.length || 0) + 1} 个分支
                             </div>
                         </div>
                     )}

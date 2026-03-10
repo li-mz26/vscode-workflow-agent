@@ -28,7 +28,7 @@ export interface NodeConfig {
     type: string;
     position: Position;
     size?: Size;
-    data: Record<string, any>;
+    data?: Record<string, any>;
     inputs: Port[];
     outputs: Port[];
     metadata?: {
@@ -37,6 +37,7 @@ export interface NodeConfig {
         icon?: string;
         color?: string;
     };
+    configRef?: string;
 }
 
 // 边（连接）定义

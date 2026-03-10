@@ -1,0 +1,7 @@
+{
+  "outputMapping": {
+    "result": "input",
+    "timestamp": "{{ctx.executionTime}}"
+  },
+  "description": "工作流结束，返回结果"
+}

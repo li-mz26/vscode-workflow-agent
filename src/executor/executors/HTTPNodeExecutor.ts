@@ -1,10 +1,15 @@
-import { NodeConfig, ExecutionContext, NodeExecutionResult, ValidationResult } from '../../../shared/types/index';
-import { NodeExecutor } from './NodeExecutorFactory';
+// ============================================
+// Executor 层 - HTTP 节点执行器
+// ============================================
 
-export class HTTPNodeExecutor extends NodeExecutor {
+import { NodeConfig, ExecutionContext, NodeExecutionResult, ValidationResult } from '../../domain';
+import { NodeExecutorBase } from '../NodeExecutorBase';
+
+export class HTTPNodeExecutor extends NodeExecutorBase {
     type = 'http';
 
     async execute(node: NodeConfig, context: ExecutionContext): Promise<NodeExecutionResult> {
+        const data = node.data || {};
         const {
             method = 'GET',
             url,
@@ -13,7 +18,7 @@ export class HTTPNodeExecutor extends NodeExecutor {
             timeout = 30000,
             retryCount = 0,
             retryDelay = 1000
-        } = node.data;
+        } = data;
 
         if (!url) {
             return { success: false, error: new Error('URL is required') };
@@ -28,7 +33,7 @@ export class HTTPNodeExecutor extends NodeExecutor {
         const renderedBody = body ? this.renderTemplate(body, context) : undefined;
 
         let lastError: Error | undefined;
-        
+
         for (let attempt = 0; attempt <= retryCount; attempt++) {
             try {
                 const response = await this.makeRequest({
@@ -129,35 +134,13 @@ export class HTTPNodeExecutor extends NodeExecutor {
         });
     }
 
-    private renderTemplate(template: string, context: ExecutionContext): string {
-        return template.replace(/\{\{(\w+(?:\.\w+)*)\}\}/g, (match, path) => {
-            const parts = path.split('.');
-            let value: any = context.inputs;
-            
-            for (const part of parts) {
-                value = value?.[part];
-                if (value === undefined) break;
-            }
-            
-            if (value === undefined) {
-                value = context.variables.get(path);
-            }
-            
-            return value !== undefined ? String(value) : match;
-        });
-    }
-
-    private sleep(ms: number): Promise<void> {
-        return new Promise(resolve => setTimeout(resolve, ms));
-    }
-
     validate(config: Record<string, any>): ValidationResult {
         const errors: string[] = [];
-        
+
         if (!config.url) {
             errors.push('URL is required');
         }
-        
+
         if (config.method && !['GET', 'POST', 'PUT', 'DELETE', 'PATCH'].includes(config.method)) {
             errors.push('Invalid HTTP method');
         }

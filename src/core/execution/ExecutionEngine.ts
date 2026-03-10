@@ -9,7 +9,7 @@ import {
     LogEntry
 } from '../../shared/types';
 import { EventEmitter } from 'events';
-import { NodeExecutorFactory } from './executors/NodeExecutorFactory';
+import { NodeExecutorFactory } from '../../executor/NodeExecutorFactory';
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -25,6 +25,7 @@ interface ExecutionNode {
 
 export class ExecutionEngine extends EventEmitter {
     private workflow: Workflow;
+    private workflowDir: string;
     private context: ExecutionContext;
     private nodeMap: Map<string, ExecutionNode> = new Map();
     private state: ExecutionState = 'idle';
@@ -36,11 +37,12 @@ export class ExecutionEngine extends EventEmitter {
     private pausePromise: Promise<void> | null = null;
     private pauseResolve: (() => void) | null = null;
 
-    constructor(workflow: Workflow) {
+    constructor(workflow: Workflow, workflowDir?: string) {
         super();
         this.workflow = workflow;
+        this.workflowDir = workflowDir || (workflow.filePath ? path.dirname(workflow.filePath) : process.cwd());
         this.executionId = `exec_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-        
+
         // 初始化执行上下文
         this.context = {
             variables: new Map(),
@@ -68,45 +70,58 @@ export class ExecutionEngine extends EventEmitter {
         }
     }
 
+    /**
+     * 加载节点外部配置
+     * 支持:
+     * - .py 文件 (Code 节点)
+     * - .json 文件 (其他节点)
+     */
     private loadNodeConfig(node: NodeConfig): NodeConfig {
         // 如果没有 configRef，直接返回原节点
-        if (!(node as any).configRef) {
+        if (!node.configRef) {
             return node;
         }
 
-        const configRef = (node as any).configRef as string;
         try {
-            // 获取 workflow.json 所在目录
-            const workflowDir = (this.workflow as any).workflowDir || process.cwd();
-            const configPath = path.resolve(workflowDir, configRef);
+            const configPath = path.resolve(this.workflowDir, node.configRef);
 
-            if (fs.existsSync(configPath)) {
-                const configContent = fs.readFileSync(configPath, 'utf-8');
-                const externalConfig = JSON.parse(configContent);
-
-                // 合并配置：外部配置优先，但保留节点的 id、position、inputs、outputs、metadata
-                return {
-                    ...externalConfig,
-                    id: node.id,
-                    type: node.type,
-                    position: node.position,
-                    inputs: node.inputs,
-                    outputs: node.outputs,
-                    metadata: {
-                        ...node.metadata,
-                        ...externalConfig.metadata
-                    },
-                    // data 字段合并：外部配置的 data 优先
-                    data: externalConfig.data || externalConfig // 对于 code/switch/llm 节点，配置可能在根级别
-                };
-            } else {
+            if (!fs.existsSync(configPath)) {
                 this.log('warn', `Config file not found: ${configPath}`, node.id);
+                return node;
             }
+
+            const configContent = fs.readFileSync(configPath, 'utf-8');
+            const fileExt = path.extname(configPath).toLowerCase();
+
+            let externalData: Record<string, any>;
+
+            if (fileExt === '.py') {
+                // Python 文件：直接作为代码
+                externalData = {
+                    code: configContent,
+                    sourceFile: configPath
+                };
+            } else if (fileExt === '.json') {
+                // JSON 文件：解析配置
+                externalData = JSON.parse(configContent);
+                externalData.sourceFile = configPath;
+            } else {
+                this.log('warn', `Unsupported config file format: ${fileExt}`, node.id);
+                return node;
+            }
+
+            // 合并配置：保留节点的结构字段，用外部配置填充 data
+            return {
+                ...node,
+                data: {
+                    ...node.data,
+                    ...externalData
+                }
+            };
         } catch (error) {
             this.log('error', `Failed to load config: ${(error as Error).message}`, node.id);
+            return node;
         }
-
-        return node;
     }
 
     async start(inputs?: Record<string, any>): Promise<ExecutionResult> {
