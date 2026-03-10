@@ -266,16 +266,26 @@ export class ExecutionEngine extends EventEmitter {
 
         try {
             // 收集输入
-            const inputs = this.collectNodeInputs(node);
+            // 对于 Start 节点，使用启动参数；其他节点从入边收集
+            const inputs = node.type === 'start' 
+                ? this.context.inputs 
+                : this.collectNodeInputs(node);
             
             // 获取执行器
             const executor = NodeExecutorFactory.create(node.type);
             
-            // 执行
-            const result = await executor.execute(node, {
-                ...this.context,
-                inputs
-            });
+            // 获取节点超时配置，默认 3 秒
+            const nodeTimeout = node.data?.timeout || 3000;
+            
+            // 执行（带超时）
+            const result = await this.executeWithTimeout(
+                executor.execute(node, {
+                    ...this.context,
+                    inputs
+                }),
+                nodeTimeout,
+                node.id
+            );
 
             execNode.status = result.success ? 'completed' : 'failed';
             execNode.outputs = result.outputs;
@@ -336,6 +346,36 @@ export class ExecutionEngine extends EventEmitter {
         }
 
         return inputs;
+    }
+
+    /**
+     * 带超时的执行包装器
+     * @param promise 执行Promise
+     * @param timeoutMs 超时时间（毫秒）
+     * @param nodeId 节点ID（用于日志）
+     */
+    private async executeWithTimeout<T>(
+        promise: Promise<T>,
+        timeoutMs: number,
+        nodeId: string
+    ): Promise<T> {
+        let timeoutId: NodeJS.Timeout;
+        
+        const timeoutPromise = new Promise<never>((_, reject) => {
+            timeoutId = setTimeout(() => {
+                reject(new Error(`Node execution timeout after ${timeoutMs}ms`));
+            }, timeoutMs);
+        });
+
+        try {
+            const result = await Promise.race([promise, timeoutPromise]);
+            clearTimeout(timeoutId!);
+            return result;
+        } catch (error) {
+            clearTimeout(timeoutId!);
+            this.log('error', `Node ${nodeId} timeout or error: ${(error as Error).message}`, nodeId);
+            throw error;
+        }
     }
 
     async pause(): Promise<void> {
