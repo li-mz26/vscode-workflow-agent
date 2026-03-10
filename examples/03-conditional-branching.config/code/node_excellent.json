@@ -1,6 +1,0 @@
-{
-  "$schema": "https://workflow-agent/config/code-node.json",
-  "type": "code",
-  "timeout": 30,
-  "code": "def main(ctx):\n    data = ctx.get('input', {})\n    _result = {\n        'grade': 'A',\n        'message': f\"恭喜 {data.get('student')}！成绩优秀 ({data.get('score')}分)\",\n        'reward': '获得奖学金'\n    }\n    return _result"
-}

@@ -1,6 +1,0 @@
-{
-  "$schema": "https://workflow-agent/config/code-node.json",
-  "type": "code",
-  "timeout": 30,
-  "code": "def main(ctx):\n    import datetime\n    data = ctx.get('input', {})\n    sentiment = data.get('sentiment', '未知')\n    summary = data.get('summary', '无摘要')\n    original = data.get('original', '')\n    \n    _result = {\n        'original_text': original[:200] + '...' if len(original) > 200 else original,\n        'sentiment_analysis': sentiment,\n        'summary': summary,\n        'word_count': len(original.split()),\n        'analyzed_at': datetime.datetime.now().isoformat()\n    }\n    return _result"
-}

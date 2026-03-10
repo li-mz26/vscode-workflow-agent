@@ -1,9 +1,0 @@
-{
-  "$schema": "https://workflow-agent/config/llm-node.json",
-  "type": "llm",
-  "model": "gpt-4",
-  "systemPrompt": "你是一个专业的文本情感分析助手。分析给定文本的情感倾向，以 JSON 格式返回结果。\n\n返回格式：\n{\n  \"sentiment\": \"positive/negative/neutral\",\n  \"confidence\": 0.95,\n  \"keywords\": [\"关键词1\", \"关键词2\"]\n}",
-  "temperature": 0.3,
-  "maxTokens": 500,
-  "promptTemplate": "请分析以下文本的情感倾向：\n\n{{text}}"
-}

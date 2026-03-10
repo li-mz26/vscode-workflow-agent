@@ -1,6 +1,0 @@
-{
-  "$schema": "https://workflow-agent/config/code-node.json",
-  "type": "code",
-  "timeout": 30,
-  "code": "# 从启动参数获取分数，如果没有则随机生成\nimport random\nscore = ctx.get('input', {}).get('score', random.randint(0, 100))\n_result = {'score': score, 'student': '张三'}"
-}
