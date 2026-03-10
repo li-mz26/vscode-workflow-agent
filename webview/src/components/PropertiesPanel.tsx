@@ -331,7 +331,7 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
                                 marginBottom: '4px',
                                 textTransform: 'uppercase'
                             }}>
-                                分支数量
+                                分支配置
                             </label>
                             <div style={{
                                 padding: '8px',
@@ -340,8 +340,46 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
                                 fontSize: '12px'
                             }}
                             >
-                                {(node.data?.conditions?.length || 0) + 1} 个分支
+                                {(node.data?.branches?.length || 2)} 个条件分支 + 1 个默认分支
                             </div>
+                            {/* 显示分支列表 */}
+                            {node.data?.branches && node.data.branches.length > 0 && (
+                                <div style={{ marginTop: '8px' }}>
+                                    {node.data.branches.map((branch: any, index: number) => (
+                                        <div key={branch.id} style={{
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            gap: '8px',
+                                            padding: '4px 0',
+                                            fontSize: '11px'
+                                        }}>
+                                            <span style={{
+                                                width: '12px',
+                                                height: '12px',
+                                                borderRadius: '50%',
+                                                background: branch.color || '#4CAF50'
+                                            }} />
+                                            <span>{branch.name}</span>
+                                        </div>
+                                    ))}
+                                    <div style={{
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '8px',
+                                        padding: '4px 0',
+                                        fontSize: '11px',
+                                        color: 'var(--vscode-descriptionForeground)'
+                                    }}>
+                                        <span style={{
+                                            width: '12px',
+                                            height: '12px',
+                                            borderRadius: '50%',
+                                            background: '#9E9E9E'
+                                        }} />
+                                        <span>默认分支</span>
+                                    </div>
+                                </div>
+                            )}
                         </div>
                     )}
                 </div>
