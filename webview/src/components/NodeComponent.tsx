@@ -33,6 +33,16 @@ const NODE_TYPE_COLORS: Record<string, string> = {
     schedule: '#FF5722',   // 深橙色
 };
 
+// Switch 节点分支颜色
+const SWITCH_BRANCH_COLORS: Record<string, string> = {
+    'branch_1': '#4CAF50',   // 绿色
+    'branch_2': '#2196F3',   // 蓝色
+    'branch_3': '#9C27B0',   // 紫色
+    'branch_4': '#FF5722',   // 深橙色
+    'branch_5': '#00BCD4',   // 青色
+    'default': '#9E9E9E',    // 灰色
+};
+
 // 根据节点类型获取颜色
 function getNodeColor(type: string): string {
     return NODE_TYPE_COLORS[type] || '#666';
@@ -231,12 +241,18 @@ export const NodeComponent: React.FC<NodeComponentProps> = ({
             
             {node.outputs.map((port, index) => {
                 const y = NODE_HEADER_HEIGHT + 20 + index * PORT_SPACING;
+
+                // Switch 节点的分支端口使用不同颜色
+                const portColor = node.type === 'switch'
+                    ? (SWITCH_BRANCH_COLORS[port.id] || color)
+                    : color;
+
                 return (
                     <g key={port.id}>
                         <circle
                             cx={NODE_WIDTH} cy={y} r={PORT_RADIUS}
                             fill="var(--vscode-panel-background)"
-                            stroke={color}
+                            stroke={portColor}
                             strokeWidth={2}
                             style={{ cursor: 'crosshair' }}
                             onMouseDown={(e) => { e.stopPropagation(); onPortMouseDown(node.id, port.id, true); }}
@@ -245,6 +261,13 @@ export const NodeComponent: React.FC<NodeComponentProps> = ({
                         <text x={NODE_WIDTH - 12} y={y + 4} fill="var(--vscode-foreground)" fontSize={11} textAnchor="end" style={{ userSelect: 'none' }}>
                             {port.name}
                         </text>
+                        {/* Switch 节点显示分支颜色指示器 */}
+                        {node.type === 'switch' && (
+                            <circle
+                                cx={NODE_WIDTH + 12} cy={y} r={4}
+                                fill={portColor}
+                            />
+                        )}
                     </g>
                 );
             })}

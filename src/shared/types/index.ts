@@ -58,17 +58,28 @@ export interface LLMNodeConfig {
 export interface SwitchCondition {
     /** 分支名称 */
     name: string;
-    /** 条件表达式 */
-    expression: string;
-    /** 目标节点 ID */
+    /** 条件表达式（存储在外部配置文件中） */
+    expression?: string;
+    /** 目标节点 ID（通过边的连接自动确定） */
     target?: string;
 }
 
+export interface SwitchBranch {
+    /** 分支 ID（用于输出端口 ID） */
+    id: string;
+    /** 分支名称 */
+    name: string;
+    /** 分支颜色 */
+    color?: string;
+}
+
 export interface SwitchNodeConfig {
-    /** 条件列表 */
+    /** 分支定义（存储在 workflow.json 中，用于可视化） */
+    branches: SwitchBranch[];
+    /** 条件列表（存储在外部配置文件中） */
     conditions: SwitchCondition[];
-    /** 默认分支目标 */
-    defaultTarget: string;
+    /** 默认分支 ID */
+    defaultBranch: string;
     /** 描述 */
     description?: string;
 }

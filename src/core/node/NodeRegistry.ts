@@ -169,13 +169,30 @@ export class NodeRegistry {
             inputs: [
                 { id: 'input', name: 'input', type: 'data', dataType: 'any', required: true }
             ],
-            outputs: [],  // 动态输出，根据条件数量
+            // 默认两个分支，用户可以添加更多
+            outputs: [
+                { id: 'branch_1', name: 'Branch 1', type: 'control', dataType: 'any', required: false },
+                { id: 'branch_2', name: 'Branch 2', type: 'control', dataType: 'any', required: false },
+                { id: 'default', name: 'Default', type: 'control', dataType: 'any', required: false }
+            ],
             configSchema: {
                 type: 'object',
                 properties: {
+                    branches: {
+                        type: 'array',
+                        description: 'Branch definitions (stored in workflow.json)',
+                        items: {
+                            type: 'object',
+                            properties: {
+                                id: { type: 'string' },
+                                name: { type: 'string' },
+                                color: { type: 'string' }
+                            }
+                        }
+                    },
                     conditions: {
                         type: 'array',
-                        description: 'Branch conditions',
+                        description: 'Branch conditions (stored in external config file)',
                         items: {
                             type: 'object',
                             properties: {
@@ -185,15 +202,19 @@ export class NodeRegistry {
                             }
                         }
                     },
-                    defaultTarget: {
+                    defaultBranch: {
                         type: 'string',
-                        description: 'Default branch if no condition matches'
+                        description: 'Default branch ID if no condition matches'
                     }
                 }
             },
             defaultData: {
+                branches: [
+                    { id: 'branch_1', name: 'Branch 1', color: '#4CAF50' },
+                    { id: 'branch_2', name: 'Branch 2', color: '#2196F3' }
+                ],
                 conditions: [],
-                defaultTarget: 'default'
+                defaultBranch: 'default'
             },
             executor: 'SwitchNodeExecutor'
         });

@@ -1,21 +1,16 @@
 {
-  "description": "根据分析结果的优先级选择处理路径",
   "conditions": [
     {
-      "name": "high",
+      "name": "branch_1",
       "expression": "input.priority === 'high' || input.score >= 80",
       "target": "node_http_005"
     },
     {
-      "name": "medium",
-      "expression": "input.priority === 'medium' || (input.score >= 50 && input.score < 80)",
-      "target": "node_end_006"
-    },
-    {
-      "name": "low",
-      "expression": "true",
+      "name": "branch_2",
+      "expression": "input.priority === 'low' || input.score < 50",
       "target": "node_end_006"
     }
   ],
-  "defaultTarget": "node_end_006"
+  "defaultBranch": "default",
+  "description": "根据分析结果的优先级选择处理路径"
 }

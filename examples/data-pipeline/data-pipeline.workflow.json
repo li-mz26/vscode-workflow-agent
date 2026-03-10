@@ -65,7 +65,18 @@
       "inputs": [
         { "id": "input", "name": "input", "type": "data", "dataType": "any", "required": true }
       ],
-      "outputs": [],
+      "outputs": [
+        { "id": "branch_1", "name": "高优先级", "type": "control", "dataType": "any", "required": false },
+        { "id": "branch_2", "name": "低优先级", "type": "control", "dataType": "any", "required": false },
+        { "id": "default", "name": "默认", "type": "control", "dataType": "any", "required": false }
+      ],
+      "data": {
+        "branches": [
+          { "id": "branch_1", "name": "高优先级", "color": "#4CAF50" },
+          { "id": "branch_2", "name": "低优先级", "color": "#2196F3" }
+        ],
+        "defaultBranch": "default"
+      },
       "metadata": {
         "name": "条件分支",
         "description": "根据分析结果选择处理路径",
@@ -127,12 +138,12 @@
     },
     {
       "id": "edge_004",
-      "source": { "nodeId": "node_switch_004", "portId": "high" },
+      "source": { "nodeId": "node_switch_004", "portId": "branch_1" },
       "target": { "nodeId": "node_http_005", "portId": "input" }
     },
     {
       "id": "edge_005",
-      "source": { "nodeId": "node_switch_004", "portId": "low" },
+      "source": { "nodeId": "node_switch_004", "portId": "branch_2" },
       "target": { "nodeId": "node_end_006", "portId": "result" }
     },
     {

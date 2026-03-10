@@ -210,12 +210,14 @@ ${code.split('\n').map((line: string) => '    ' + line).join('\n')}
 
     /**
      * 生成 Switch 节点配置文件内容
+     * 配置文件只存储条件表达式，分支定义存储在 workflow.json 中
      */
     private generateSwitchConfigContent(node: NodeConfig): string {
         const data: Partial<SwitchNodeConfig> = node.data || {};
-        const config: SwitchNodeConfig = {
+        // 外部配置文件只存储条件表达式
+        const config = {
             conditions: data.conditions || [],
-            defaultTarget: data.defaultTarget || 'default',
+            defaultBranch: data.defaultBranch || 'default',
             description: node.metadata?.description || data.description || ''
         };
         return JSON.stringify(config, null, 2);
