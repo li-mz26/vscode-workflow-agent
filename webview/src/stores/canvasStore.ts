@@ -118,6 +118,7 @@ interface CanvasState {
     updateNode: (nodeId: string, updates: Partial<NodeData>) => void;
     updateNodeData: (nodeId: string, data: Record<string, any>) => void;
     moveNode: (nodeId: string, position: Position) => void;
+    saveMoveHistory: () => void; // 新增：保存移动历史
     addNode: (node: NodeData) => void;
     deleteNode: (nodeId: string) => void;
     addEdge: (edge: EdgeData) => void;
@@ -264,6 +265,25 @@ export const useCanvasStore = create<CanvasState>()(
                 // Only save on drag end (handled separately)
                 node.position = position;
                 state.isDirty = true;
+            }
+        }),
+        
+        // 保存移动历史（在拖拽结束时调用）
+        saveMoveHistory: () => set((state) => {
+            if (state.workflow && state.isDirty) {
+                const currentState: HistoryEntry = {
+                    workflow: deepClone(state.workflow),
+                    timestamp: Date.now()
+                };
+                state.history.undoStack.push(currentState);
+                
+                if (state.history.undoStack.length > state.history.maxSize) {
+                    state.history.undoStack.shift();
+                }
+                
+                state.history.redoStack = [];
+                state.history.canUndo = true;
+                state.history.canRedo = false;
             }
         }),
         

@@ -5,6 +5,7 @@ import { Workflow } from '../../shared/types';
 import { WorkflowOutputChannel } from '../output/WorkflowOutputChannel';
 import { ExecutionStateManager } from '../execution/ExecutionStateManager';
 import { NodeConfigManager } from '../config/NodeConfigManager';
+import { ExecutionEngine } from '../execution/ExecutionEngine';
 
 export class WorkflowEditorProvider implements vscode.CustomTextEditorProvider {
     public static readonly viewType = 'workflowAgent.editor';
@@ -244,6 +245,9 @@ export class WorkflowEditorProvider implements vscode.CustomTextEditorProvider {
     private async runWorkflow(filePath: string, workflow: Workflow): Promise<void> {
         const workflowId = path.basename(filePath, '.workflow.json');
         
+        // 设置 workflowDir 用于加载外部配置
+        (workflow as any).workflowDir = path.dirname(filePath);
+        
         // 显示输出面板
         this.outputChannel.show();
         this.outputChannel.clear();
@@ -252,12 +256,41 @@ export class WorkflowEditorProvider implements vscode.CustomTextEditorProvider {
         // 开始执行状态跟踪
         this.executionStateManager.startExecution(workflowId);
         
-        // 模拟执行流程（实际应调用 ExecutionEngine）
-        await this.simulateExecution(filePath, workflow, workflowId);
+        // 创建执行引擎
+        const engine = new ExecutionEngine(workflow);
+        
+        // 监听执行事件
+        engine.on('node:started', (data: any) => {
+            const node = workflow.nodes.find(n => n.id === data.nodeId);
+            this.executionStateManager.setNodeRunning(workflowId, data.nodeId);
+            this.outputChannel.logNodeStart(data.nodeId, node?.type || 'unknown', node?.metadata?.name || data.nodeId);
+        });
+        
+        engine.on('node:completed', (data: any) => {
+            const node = workflow.nodes.find(n => n.id === data.nodeId);
+            this.executionStateManager.setNodeSuccess(workflowId, data.nodeId, data.outputs);
+            this.outputChannel.logNodeComplete(data.nodeId, node?.type || 'unknown', 0, data.outputs);
+        });
+        
+        engine.on('node:failed', (data: any) => {
+            const node = workflow.nodes.find(n => n.id === data.nodeId);
+            this.executionStateManager.setNodeError(workflowId, data.nodeId, data.error?.message || 'Unknown error');
+            this.outputChannel.logNodeError(data.nodeId, node?.type || 'unknown', data.error?.message || 'Unknown error');
+        });
+        
+        // 执行工作流
+        const result = await engine.start();
+        
+        // 完成执行
+        this.executionStateManager.completeExecution(workflowId, result.success);
+        this.outputChannel.logWorkflowComplete(workflowId, result.success, result.duration);
     }
 
     private async debugWorkflow(filePath: string, workflow: Workflow): Promise<void> {
         const workflowId = path.basename(filePath, '.workflow.json');
+        
+        // 设置 workflowDir 用于加载外部配置
+        (workflow as any).workflowDir = path.dirname(filePath);
         
         this.outputChannel.show();
         this.outputChannel.clear();
@@ -266,129 +299,46 @@ export class WorkflowEditorProvider implements vscode.CustomTextEditorProvider {
         this.outputChannel.log(`边数量: ${workflow.edges.length}`);
         this.outputChannel.log('─'.repeat(50));
         
-        // 开始执行状态跟踪（带调试标志）
+        // 开始执行状态跟踪
         this.executionStateManager.startExecution(workflowId);
         
-        // 模拟调试执行
-        await this.simulateExecution(filePath, workflow, workflowId, true);
-    }
-
-    private async simulateExecution(
-        filePath: string,
-        workflow: Workflow,
-        workflowId: string,
-        isDebug: boolean = false
-    ): Promise<void> {
-        // 按拓扑排序执行节点（简化版）
-        const executedNodes = new Set<string>();
-        const nodeOutputs = new Map<string, any>();
+        // 创建执行引擎
+        const engine = new ExecutionEngine(workflow);
         
+        // 为所有节点设置断点（调试模式）
         for (const node of workflow.nodes) {
-            if (isDebug) {
-                await new Promise(resolve => setTimeout(resolve, 500)); // 调试时放慢速度
-            }
-            
-            // 设置节点为运行中
-            this.executionStateManager.setNodeRunning(workflowId, node.id);
-            this.outputChannel.logNodeStart(node.id, node.type, node.metadata?.name || node.type);
-            
-            try {
-                // 获取输入数据（来自上游节点）
-                const inputs = this.getNodeInputs(node.id, workflow.edges, nodeOutputs);
-                
-                // 加载节点配置
-                const config = await this.nodeConfigManager.loadNodeConfig(filePath, node);
-                
-                // 模拟执行节点
-                const startTime = Date.now();
-                const output = await this.executeNode(node, config, inputs);
-                const duration = Date.now() - startTime;
-                
-                // 保存输出
-                nodeOutputs.set(node.id, output);
-                executedNodes.add(node.id);
-                
-                // 更新节点状态为成功
-                this.executionStateManager.setNodeSuccess(workflowId, node.id, output);
-                this.outputChannel.logNodeComplete(node.id, node.type, duration, output);
-                
-                // 记录数据流
-                const outgoingEdges = workflow.edges.filter(e => e.source.nodeId === node.id);
-                for (const edge of outgoingEdges) {
-                    this.outputChannel.logDataFlow(node.id, edge.target.nodeId, output);
-                }
-                
-            } catch (error: any) {
-                this.executionStateManager.setNodeError(workflowId, node.id, error.message);
-                this.outputChannel.logNodeError(node.id, node.type, error.message);
-                this.executionStateManager.completeExecution(workflowId, false);
-                this.outputChannel.logWorkflowComplete(workflowId, false, Date.now() - 
-                    (this.executionStateManager.getExecutionState(workflowId)?.startTime || Date.now()));
-                return;
-            }
+            engine.setBreakpoint(node.id);
         }
         
-        this.executionStateManager.completeExecution(workflowId, true);
-        const totalDuration = Date.now() - 
-            (this.executionStateManager.getExecutionState(workflowId)?.startTime || Date.now());
-        this.outputChannel.logWorkflowComplete(workflowId, true, totalDuration);
-    }
-
-    private getNodeInputs(
-        nodeId: string,
-        edges: any[],
-        nodeOutputs: Map<string, any>
-    ): any {
-        const inputs: any = {};
-        const incomingEdges = edges.filter(e => e.target.nodeId === nodeId);
+        // 监听执行事件
+        engine.on('node:started', (data: any) => {
+            const node = workflow.nodes.find(n => n.id === data.nodeId);
+            this.executionStateManager.setNodeRunning(workflowId, data.nodeId);
+            this.outputChannel.logNodeStart(data.nodeId, node?.type || 'unknown', node?.metadata?.name || data.nodeId);
+        });
         
-        for (const edge of incomingEdges) {
-            const sourceOutput = nodeOutputs.get(edge.source.nodeId);
-            if (sourceOutput !== undefined) {
-                inputs[edge.source.portId || 'output'] = sourceOutput;
-            }
-        }
+        engine.on('node:completed', (data: any) => {
+            const node = workflow.nodes.find(n => n.id === data.nodeId);
+            this.executionStateManager.setNodeSuccess(workflowId, data.nodeId, data.outputs);
+            this.outputChannel.logNodeComplete(data.nodeId, node?.type || 'unknown', 0, data.outputs);
+        });
         
-        // 所有输入合并为一个 JSON 对象
-        if (incomingEdges.length === 1) {
-            return nodeOutputs.get(incomingEdges[0].source.nodeId);
-        }
+        engine.on('node:failed', (data: any) => {
+            const node = workflow.nodes.find(n => n.id === data.nodeId);
+            this.executionStateManager.setNodeError(workflowId, data.nodeId, data.error?.message || 'Unknown error');
+            this.outputChannel.logNodeError(data.nodeId, node?.type || 'unknown', data.error?.message || 'Unknown error');
+        });
         
-        return inputs;
-    }
-
-    private async executeNode(node: any, config: any, inputs: any): Promise<any> {
-        // 简化版节点执行，实际应调用相应的执行器
-        switch (node.type) {
-            case 'start':
-                return { trigger: 'manual', timestamp: new Date().toISOString() };
-            
-            case 'code':
-                // 实际应调用 PythonSandbox
-                return { result: 'code_executed', input: inputs };
-            
-            case 'llm':
-                // 实际应调用 LLM API
-                return { content: 'LLM response', usage: { tokens: 100 } };
-            
-            case 'switch':
-                // 根据条件返回分支
-                return { branch: 'default', condition: inputs };
-            
-            case 'http':
-                // 实际应发起 HTTP 请求
-                return { status: 200, body: '{}', json: {} };
-            
-            case 'webhook':
-                // 实际应发送 webhook
-                return { sent: true };
-            
-            case 'end':
-                return { result: inputs };
-            
-            default:
-                return { ...inputs, processed: true };
-        }
+        engine.on('breakpoint:hit', (data: any) => {
+            this.outputChannel.log(`⏸️ 断点命中: ${data.nodeId}`);
+        });
+        
+        // 执行工作流（调试模式需要手动 step）
+        const result = await engine.start();
+        
+        // 完成执行
+        this.executionStateManager.completeExecution(workflowId, result.success);
+        this.outputChannel.logWorkflowComplete(workflowId, result.success, result.duration);
     }
 
     private getHtmlForWebview(webview: vscode.Webview, workflow: Workflow): string {

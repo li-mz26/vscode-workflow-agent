@@ -196,6 +196,12 @@ export class ExecutionEngine extends EventEmitter {
             throw new Error(`Node not found: ${nodeId}`);
         }
 
+        // 如果节点已经执行完成（例如 merge 节点从多个分支到达），跳过重复执行
+        if (execNode.status === 'completed') {
+            this.log('debug', `Node already completed, skipping: ${nodeId}`, nodeId);
+            return;
+        }
+
         // 检查断点
         if (this.breakpoints.has(nodeId)) {
             this.state = 'paused';
@@ -218,8 +224,30 @@ export class ExecutionEngine extends EventEmitter {
         // 找到下游节点并执行
         const outgoingEdges = this.workflow.edges.filter(e => e.source.nodeId === nodeId);
         
-        for (const edge of outgoingEdges) {
-            await this.executeFromNode(edge.target.nodeId);
+        // 根据节点类型决定执行策略
+        const nodeType = execNode.node.type;
+        
+        if (nodeType === 'switch') {
+            // Switch 节点：只执行匹配的分支
+            const branch = execNode.outputs?.branch;
+            if (branch) {
+                const targetEdge = outgoingEdges.find(e => e.source.portId === branch);
+                if (targetEdge) {
+                    this.log('info', `Switch branching to: ${branch}`, nodeId);
+                    await this.executeFromNode(targetEdge.target.nodeId);
+                } else {
+                    this.log('warn', `No edge found for branch: ${branch}`, nodeId);
+                }
+            }
+        } else if (nodeType === 'parallel') {
+            // Parallel 节点：并行执行所有分支
+            const promises = outgoingEdges.map(edge => this.executeFromNode(edge.target.nodeId));
+            await Promise.all(promises);
+        } else {
+            // 普通节点：顺序执行所有下游节点
+            for (const edge of outgoingEdges) {
+                await this.executeFromNode(edge.target.nodeId);
+            }
         }
     }
 

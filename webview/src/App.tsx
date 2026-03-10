@@ -28,16 +28,31 @@ interface WorkflowExecutionState {
 }
 
 // 视图模式
- type ViewMode = 'visual' | 'json';
+type ViewMode = 'visual' | 'json';
+
+// 拖拽状态类型
+interface DragState {
+    isDragging: boolean;
+    nodeId: string | null;
+    isNewNode: boolean;
+    nodeType: string | null;
+}
 
 function App() {
     const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
     const [executionState, setExecutionState] = useState<WorkflowExecutionState | null>(null);
     const [isDeleteZoneActive, setIsDeleteZoneActive] = useState(false);
-    const [draggedNodeId, setDraggedNodeId] = useState<string | null>(null);
     const [viewMode, setViewMode] = useState<ViewMode>('visual');
     const [jsonContent, setJsonContent] = useState<string>('');
     const [jsonError, setJsonError] = useState<string | null>(null);
+    
+    // 使用 ref 存储拖拽状态，避免闭包问题和全局变量污染
+    const dragStateRef = useRef<DragState>({
+        isDragging: false,
+        nodeId: null,
+        isNewNode: false,
+        nodeType: null
+    });
     
     // 从 store 获取需要的函数和状态
     const { 
@@ -51,10 +66,48 @@ function App() {
         history,
         isDirty,
         setNodeExecutionData,
-        clearNodeExecutionData
+        clearNodeExecutionData,
+        saveMoveHistory
     } = useCanvasStore();
     
     const deleteZoneRef = useRef<HTMLDivElement>(null);
+    
+    // 统一的删除节点处理函数
+    const handleDeleteNode = useCallback((nodeId: string) => {
+        const store = useCanvasStore.getState();
+        if (!store.workflow) return;
+        
+        const node = store.workflow.nodes.find(n => n.id === nodeId);
+        if (!node) return;
+        
+        console.log('[App] Deleting node:', nodeId);
+        store.deleteNode(nodeId);
+        
+        // 获取更新后的 workflow
+        const updatedWorkflow = useCanvasStore.getState().workflow;
+        
+        vscode.postMessage({
+            type: 'node:delete',
+            payload: {
+                workflow: updatedWorkflow,
+                nodeId,
+                nodeType: node.type
+            }
+        });
+    }, []);
+    
+    // 检查坐标是否在删除区域内
+    const checkInDeleteZone = useCallback((clientX: number, clientY: number): boolean => {
+        if (!deleteZoneRef.current) return false;
+        
+        const rect = deleteZoneRef.current.getBoundingClientRect();
+        return (
+            clientX >= rect.left &&
+            clientX <= rect.right &&
+            clientY >= rect.top &&
+            clientY <= rect.bottom
+        );
+    }, []);
     
     // Load workflow from VSCode
     useEffect(() => {
@@ -166,99 +219,84 @@ function App() {
         }
     }, [setWorkflow]);
 
-    // Handle node drag from palette
+    // Handle node drag start from palette (新节点)
     const handleNodeDragStart = useCallback((type: string) => {
-        (window as any).__draggedNodeType = type;
-        (window as any).__isNewNode = true;
+        dragStateRef.current = {
+            isDragging: true,
+            nodeId: null,
+            isNewNode: true,
+            nodeType: type
+        };
     }, []);
 
-    // Handle existing node drag start
+    // Handle existing node drag start (画布上的节点)
     const handleNodeDragStartFromCanvas = useCallback((nodeId: string) => {
-        console.log('[App] Drag start from canvas:', nodeId);
-        setDraggedNodeId(nodeId);
-        (window as any).__isNewNode = false;
-    }, []);
+        const node = workflow?.nodes.find(n => n.id === nodeId);
+        dragStateRef.current = {
+            isDragging: true,
+            nodeId,
+            isNewNode: false,
+            nodeType: node?.type || null
+        };
+    }, [workflow]);
     
-    // Handle drag over delete zone
-    const handleDeleteZoneDragOver = useCallback((e: React.DragEvent) => {
-        e.preventDefault();
-        console.log('[App] Delete zone drag over, draggedNodeId:', draggedNodeId);
-        if (draggedNodeId) {
-            setIsDeleteZoneActive(true);
+    // Handle node drag move - 更新删除区域状态
+    const handleNodeDragMove = useCallback((nodeId: string | null, clientX: number, clientY: number) => {
+        if (dragStateRef.current.isDragging && !dragStateRef.current.isNewNode) {
+            setIsDeleteZoneActive(checkInDeleteZone(clientX, clientY));
         }
-    }, [draggedNodeId]);
-
-    // Handle drag leave delete zone
-    const handleDeleteZoneDragLeave = useCallback((e: React.DragEvent) => {
-        e.preventDefault();
-        console.log('[App] Delete zone drag leave');
-        setIsDeleteZoneActive(false);
-    }, []);
-
-    // Handle drop on delete zone
-    const handleDeleteZoneDrop = useCallback((e: React.DragEvent) => {
-        e.preventDefault();
-        e.stopPropagation();
-        console.log('[App] Delete zone drop, draggedNodeId:', draggedNodeId, 'isNewNode:', (window as any).__isNewNode);
+    }, [checkInDeleteZone]);
+    
+    // Handle node drag end - 统一的拖拽结束处理
+    const handleNodeDragEnd = useCallback((nodeId: string | null, clientX: number, clientY: number) => {
+        const dragState = dragStateRef.current;
         
-        // 只处理从画布拖拽的节点，不处理从 palette 拖拽的新节点
-        const isNewNode = (window as any).__isNewNode;
-        if (isNewNode) {
-            console.log('[App] New node dropped on delete zone, ignoring');
-            // 新节点拖到删除区，不删除，但阻止事件传播
+        // 只处理画布上的节点拖拽结束
+        if (!dragState.isDragging || dragState.isNewNode || !nodeId) {
+            // 如果是新节点，检查是否要添加到画布
+            if (dragState.isNewNode && dragState.nodeType) {
+                // 新节点处理由 handleCanvasDrop 处理
+            }
+            dragStateRef.current = { isDragging: false, nodeId: null, isNewNode: false, nodeType: null };
+            setIsDeleteZoneActive(false);
             return;
         }
         
-        console.log('[App] Attempting to delete node:', draggedNodeId, 'workflow exists:', !!workflow);
-        if (draggedNodeId && workflow) {
-            const node = workflow.nodes.find(n => n.id === draggedNodeId);
-            console.log('[App] Found node:', node?.id, 'node type:', node?.type);
-            if (node) {
-                console.log('[App] Calling deleteNode for:', draggedNodeId);
-                deleteNode(draggedNodeId);
-                vscode.postMessage({
-                    type: 'node:delete',
-                    payload: { 
-                        workflow,
-                        nodeId: draggedNodeId,
-                        nodeType: node.type
-                    }
-                });
-                console.log('[App] Node deleted and message sent');
-            }
+        // 检查是否在删除区域
+        if (checkInDeleteZone(clientX, clientY)) {
+            handleDeleteNode(nodeId);
+        } else {
+            // 不在删除区域，保存移动历史（支持撤销）
+            saveMoveHistory();
         }
+        
+        // 重置拖拽状态
+        dragStateRef.current = { isDragging: false, nodeId: null, isNewNode: false, nodeType: null };
         setIsDeleteZoneActive(false);
-        setDraggedNodeId(null);
-        delete (window as any).__isNewNode;
-    }, [draggedNodeId, workflow, deleteNode]);
+    }, [checkInDeleteZone, handleDeleteNode, saveMoveHistory]);
     
-    // Handle drop on canvas
+    // Handle drop on canvas (添加新节点)
     const handleCanvasDrop = useCallback((e: React.DragEvent) => {
         e.preventDefault();
         e.stopPropagation();
 
-        const type = (window as any).__draggedNodeType;
-        const isNewNode = (window as any).__isNewNode;
-
-        // 如果是从画布拖拽的节点，不做处理（已由 delete zone 处理）
-        if (!isNewNode) {
-            setDraggedNodeId(null);
-            delete (window as any).__isNewNode;
+        const dragState = dragStateRef.current;
+        
+        // 只处理新节点拖拽
+        if (!dragState.isDragging || !dragState.isNewNode || !dragState.nodeType) {
             return;
         }
-
-        if (!type) return;
 
         const rect = e.currentTarget.getBoundingClientRect();
         const x = (e.clientX - rect.left - 100);
         const y = (e.clientY - rect.top - 40);
 
-        const node = nodeRegistry.createNode(type, { x, y });
+        const node = nodeRegistry.createNode(dragState.nodeType, { x, y });
 
-        // 先添加节点到 store
+        // 添加节点到 store
         addNode(node);
 
-        // 再获取包含新节点的最新 workflow 状态
+        // 获取包含新节点的最新 workflow 状态
         const updatedWorkflow = useCanvasStore.getState().workflow;
 
         vscode.postMessage({
@@ -266,8 +304,8 @@ function App() {
             payload: { workflow: updatedWorkflow, node }
         });
 
-        delete (window as any).__draggedNodeType;
-        delete (window as any).__isNewNode;
+        // 重置拖拽状态
+        dragStateRef.current = { isDragging: false, nodeId: null, isNewNode: false, nodeType: null };
     }, [addNode]);
     
     // Handle save
@@ -311,39 +349,29 @@ function App() {
         redo();
     }, [redo]);
 
-    // Global mouse up handler to detect delete zone drop
+    // 全局 mouseup 监听，确保拖拽状态正确重置
     useEffect(() => {
         const handleGlobalMouseUp = (e: MouseEvent) => {
-            if (draggedNodeId && deleteZoneRef.current) {
-                const deleteZoneRect = deleteZoneRef.current.getBoundingClientRect();
-                const isInDeleteZone =
-                    e.clientX >= deleteZoneRect.left &&
-                    e.clientX <= deleteZoneRect.right &&
-                    e.clientY >= deleteZoneRect.top &&
-                    e.clientY <= deleteZoneRect.bottom;
-
-                if (isInDeleteZone) {
-                    const node = workflow?.nodes.find(n => n.id === draggedNodeId);
-                    if (node) {
-                        deleteNode(draggedNodeId);
-                        vscode.postMessage({
-                            type: 'node:delete',
-                            payload: {
-                                workflow,
-                                nodeId: draggedNodeId,
-                                nodeType: node.type
-                            }
-                        });
-                    }
+            const dragState = dragStateRef.current;
+            
+            if (dragState.isDragging && !dragState.isNewNode && dragState.nodeId) {
+                // 如果还在拖拽状态，检查最终位置
+                if (checkInDeleteZone(e.clientX, e.clientY)) {
+                    handleDeleteNode(dragState.nodeId);
                 }
             }
-            setDraggedNodeId(null);
+            
+            // 重置状态
+            dragStateRef.current = { isDragging: false, nodeId: null, isNewNode: false, nodeType: null };
             setIsDeleteZoneActive(false);
         };
 
         window.addEventListener('mouseup', handleGlobalMouseUp);
         return () => window.removeEventListener('mouseup', handleGlobalMouseUp);
-    }, [draggedNodeId, workflow, deleteNode]);
+    }, [checkInDeleteZone, handleDeleteNode]);
+
+    // 判断是否显示删除区域
+    const showDeleteZone = dragStateRef.current.isDragging && !dragStateRef.current.isNewNode && dragStateRef.current.nodeId !== null;
 
     return (
         <div style={{
@@ -451,69 +479,13 @@ function App() {
                             <Canvas
                                 onNodeSelect={setSelectedNodeId}
                                 onNodeDragStart={handleNodeDragStartFromCanvas}
-                                onNodeDragMove={(nodeId, clientX, clientY) => {
-                                    if (nodeId && deleteZoneRef.current) {
-                                        const rect = deleteZoneRef.current.getBoundingClientRect();
-                                        const isInDeleteZone =
-                                            clientX >= rect.left &&
-                                            clientX <= rect.right &&
-                                            clientY >= rect.top &&
-                                            clientY <= rect.bottom;
-                                        setIsDeleteZoneActive(isInDeleteZone);
-                                    }
-                                }}
-                                onNodeDragEnd={(nodeId, clientX, clientY) => {
-                                    console.log('[App] onNodeDragEnd, nodeId:', nodeId, 'clientX:', clientX, 'clientY:', clientY);
-
-                                    // 检测是否在删除区域内
-                                    if (deleteZoneRef.current) {
-                                        const rect = deleteZoneRef.current.getBoundingClientRect();
-                                        const isInDeleteZone =
-                                            clientX >= rect.left &&
-                                            clientX <= rect.right &&
-                                            clientY >= rect.top &&
-                                            clientY <= rect.bottom;
-
-                                        console.log('[App] Delete zone rect:', rect, 'isInDeleteZone:', isInDeleteZone);
-
-                                        if (isInDeleteZone) {
-                                            // 使用 getState 获取最新状态和函数
-                                            const store = useCanvasStore.getState();
-                                            console.log('[App] Current workflow exists:', !!store.workflow);
-                                            if (store.workflow) {
-                                                const node = store.workflow.nodes.find(n => n.id === nodeId);
-                                                console.log('[App] Found node for deletion:', node?.id, 'total nodes:', store.workflow.nodes.length);
-                                                if (node) {
-                                                    console.log('[App] Deleting node:', nodeId);
-                                                    store.deleteNode(nodeId);
-                                                    
-                                                    // deleteNode 后重新获取更新后的状态
-                                                    const updatedStore = useCanvasStore.getState();
-                                                    console.log('[App] After delete, nodes count:', updatedStore.workflow?.nodes.length);
-                                                    
-                                                    vscode.postMessage({
-                                                        type: 'node:delete',
-                                                        payload: {
-                                                            workflow: updatedStore.workflow,
-                                                            nodeId,
-                                                            nodeType: node.type
-                                                        }
-                                                    });
-                                                    console.log('[App] Delete message sent with updated workflow');
-                                                }
-                                            }
-                                        }
-                                    }
-
-                                    setIsDeleteZoneActive(false);
-                                    setDraggedNodeId(null);
-                                    delete (window as any).__isNewNode;
-                                }}
+                                onNodeDragMove={handleNodeDragMove}
+                                onNodeDragEnd={handleNodeDragEnd}
                                 executionState={executionState}
                             />
                             
                             {/* 删除区域 - 只在从画布拖拽节点时显示 */}
-                            {draggedNodeId && (
+                            {showDeleteZone && (
                             <div
                                 ref={deleteZoneRef}
                                 style={{
@@ -536,9 +508,6 @@ function App() {
                                     transition: 'all 0.2s ease',
                                     zIndex: 1000
                                 }}
-                                onDragOver={handleDeleteZoneDragOver}
-                                onDragLeave={handleDeleteZoneDragLeave}
-                                onDrop={handleDeleteZoneDrop}
                             >
                                 <span style={{
                                     fontSize: '24px',

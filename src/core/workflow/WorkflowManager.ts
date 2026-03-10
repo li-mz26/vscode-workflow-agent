@@ -243,10 +243,81 @@ export class WorkflowManager extends EventEmitter {
             }
         }
 
+        // 检测循环依赖（环检测）
+        const cycleError = this.detectCycle(workflow);
+        if (cycleError) {
+            errors.push(cycleError);
+        }
+
         return {
             valid: errors.length === 0,
             errors: errors.length > 0 ? errors : undefined
         };
+    }
+
+    /**
+     * 使用 DFS 检测工作流中的循环依赖
+     * @returns 如果存在循环，返回错误信息；否则返回 null
+     */
+    private detectCycle(workflow: Workflow): string | null {
+        // 构建邻接表
+        const adjacencyList = new Map<string, string[]>();
+        
+        for (const node of workflow.nodes) {
+            adjacencyList.set(node.id, []);
+        }
+        
+        for (const edge of workflow.edges) {
+            const neighbors = adjacencyList.get(edge.source.nodeId);
+            if (neighbors) {
+                neighbors.push(edge.target.nodeId);
+            }
+        }
+        
+        // DFS 状态：0=未访问, 1=访问中, 2=已完成
+        const visitState = new Map<string, 0 | 1 | 2>();
+        for (const node of workflow.nodes) {
+            visitState.set(node.id, 0);
+        }
+        
+        // 检测环的路径
+        const path: string[] = [];
+        
+        const dfs = (nodeId: string): boolean => {
+            visitState.set(nodeId, 1); // 标记为访问中
+            path.push(nodeId);
+            
+            const neighbors = adjacencyList.get(nodeId) || [];
+            for (const neighbor of neighbors) {
+                const state = visitState.get(neighbor);
+                
+                if (state === 1) {
+                    // 发现环：找到回边
+                    const cycleStart = path.indexOf(neighbor);
+                    const cyclePath = path.slice(cycleStart).join(' -> ') + ' -> ' + neighbor;
+                    return true;
+                }
+                
+                if (state === 0 && dfs(neighbor)) {
+                    return true;
+                }
+            }
+            
+            visitState.set(nodeId, 2); // 标记为已完成
+            path.pop();
+            return false;
+        };
+        
+        // 从所有未访问的节点开始 DFS
+        for (const node of workflow.nodes) {
+            if (visitState.get(node.id) === 0) {
+                if (dfs(node.id)) {
+                    return `Cycle detected in workflow: nodes may form an infinite loop during execution`;
+                }
+            }
+        }
+        
+        return null;
     }
 
     // 节点操作
