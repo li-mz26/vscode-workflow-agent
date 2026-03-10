@@ -5,15 +5,37 @@ interface EdgeComponentProps {
     edge: EdgeData;
     path: string;
     selected: boolean;
-    isFlowing?: boolean;
+    /** 运行完成后是否经过此边 (undefined=未运行, true=经过, false=未经过) */
+    executed?: boolean;
 }
 
 export const EdgeComponent: React.FC<EdgeComponentProps> = ({
     edge,
     path,
     selected,
-    isFlowing = false
+    executed = undefined
 }) => {
+    // 根据执行状态确定颜色和箭头
+    // undefined (未运行): 默认颜色
+    // true (经过): 绿色
+    // false (未经过): 灰色
+    const getStrokeColor = () => {
+        if (executed === true) return '#4CAF50'; // 绿色 - 经过
+        if (executed === false) return '#666666'; // 灰色 - 未经过
+        return 'var(--vscode-foreground)'; // 默认颜色
+    };
+
+    const getMarkerEnd = () => {
+        if (executed === true) return 'url(#arrowhead-green)';
+        if (executed === false) return 'url(#arrowhead-gray)';
+        return 'url(#arrowhead)';
+    };
+
+    const getOpacity = () => {
+        if (executed === false) return 0.4; // 未经过的边更淡
+        return 0.8;
+    };
+
     return (
         <g>
             {/* Invisible wider path for easier selection */}
@@ -28,57 +50,12 @@ export const EdgeComponent: React.FC<EdgeComponentProps> = ({
             {/* Visible path */}
             <path
                 d={path}
-                stroke={selected ? 'var(--vscode-focusBorder)' : 'var(--vscode-foreground)'}
+                stroke={selected ? 'var(--vscode-focusBorder)' : getStrokeColor()}
                 strokeWidth={selected ? 3 : 2}
                 fill="none"
-                markerEnd="url(#arrowhead)"
-                opacity={0.8}
+                markerEnd={getMarkerEnd()}
+                opacity={getOpacity()}
             />
-
-            {/* Data flow animation */}
-            {isFlowing && (
-                <>
-                    <defs>
-                        <linearGradient id={`flow-gradient-${edge.id}`} x1="0%" y1="0%" x2="100%" y2="0%">
-                            <stop offset="0%" stopColor="transparent" />
-                            <stop offset="50%" stopColor="#FFA500" />
-                            <stop offset="100%" stopColor="transparent" />
-                            <animate
-                                attributeName="x1"
-                                from="-100%"
-                                to="100%"
-                                dur="1s"
-                                repeatCount="indefinite"
-                            />
-                            <animate
-                                attributeName="x2"
-                                from="0%"
-                                to="200%"
-                                dur="1s"
-                                repeatCount="indefinite"
-                            />
-                        </linearGradient>
-                    </defs>
-                    <path
-                        d={path}
-                        stroke={`url(#flow-gradient-${edge.id})`}
-                        strokeWidth={4}
-                        fill="none"
-                        opacity={0.8}
-                    />
-                </>
-            )}
-
-            {/* 成功流动动画 */}
-            {isFlowing && (
-                <circle r="3" fill="#4CAF50">
-                    <animateMotion
-                        dur="0.8s"
-                        repeatCount="indefinite"
-                        path={path}
-                    />
-                </circle>
-            )}
         </g>
     );
 };

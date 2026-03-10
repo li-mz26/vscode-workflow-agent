@@ -242,6 +242,12 @@ export const Canvas: React.FC<CanvasProps> = ({
                 <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
                     <polygon points="0 0, 10 3.5, 0 7" fill="var(--vscode-foreground)"/>
                 </marker>
+                <marker id="arrowhead-green" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+                    <polygon points="0 0, 10 3.5, 0 7" fill="#4CAF50"/>
+                </marker>
+                <marker id="arrowhead-gray" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+                    <polygon points="0 0, 10 3.5, 0 7" fill="#666666"/>
+                </marker>
                 <filter id="glow-running">
                     <feGaussianBlur stdDeviation="3" result="coloredBlur"/>
                     <feMerge>
@@ -267,13 +273,25 @@ export const Canvas: React.FC<CanvasProps> = ({
                         edge.target.portId
                     );
                     
-                    const isFlowing = executionState?.nodeStates.find(
-                        s => s.nodeId === edge.source.nodeId && s.status === 'success'
-                    );
+                    // 判断边的执行状态
+                    // 只有在运行完成或失败时才显示执行路径状态
+                    let edgeExecuted: boolean | undefined = undefined;
+                    const isExecutionDone = executionState?.status === 'completed' || executionState?.status === 'failed';
+                    
+                    if (isExecutionDone && executionState) {
+                        // 边被经过 = 源节点执行成功
+                        const sourceNodeState = executionState.nodeStates.find(s => s.nodeId === edge.source.nodeId);
+                        edgeExecuted = sourceNodeState?.status === 'success';
+                    }
                     
                     return (
                         <g key={edge.id}>
-                            <EdgeComponent edge={edge} path={path} selected={false} isFlowing={!!isFlowing}/>
+                            <EdgeComponent 
+                                edge={edge} 
+                                path={path} 
+                                selected={false} 
+                                executed={edgeExecuted}
+                            />
                         </g>
                     );
                 })}
