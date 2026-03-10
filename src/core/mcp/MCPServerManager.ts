@@ -187,7 +187,7 @@ export class MCPServerManager {
                         name: { type: 'string', description: '新名称' },
                         position: {
                             type: 'object',
-                            properties: { x: { type: 'number' }, y: { type: 'number' } },
+                            properties: { x: { type: 'number', description: 'X坐标' }, y: { type: 'number', description: 'Y坐标' } },
                             description: '新位置'
                         },
                         config: { type: 'object', description: '更新配置' }
@@ -329,12 +329,12 @@ export class MCPServerManager {
                         nodes: {
                             type: 'array',
                             description: '节点列表',
-                            items: { type: 'object' }
+                            items: { type: 'object', description: '节点对象' }
                         },
                         edges: {
                             type: 'array',
                             description: '连接列表',
-                            items: { type: 'object' }
+                            items: { type: 'object', description: '连接对象' }
                         }
                     },
                     required: ['workflowId', 'nodes']
@@ -385,6 +385,7 @@ export class MCPServerManager {
                             description: '分支列表',
                             items: {
                                 type: 'object',
+                                description: '分支配置',
                                 properties: {
                                     name: { type: 'string', description: '分支名称' },
                                     condition: { type: 'string', description: '条件表达式' }
