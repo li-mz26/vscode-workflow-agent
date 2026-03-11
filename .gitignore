@@ -1,0 +1,34 @@
+# Dependencies
+node_modules/
+webview-ui/node_modules/
+
+# Build output
+out/
+dist/
+webview-ui/dist/
+
+# VSCode extension package
+*.vsix
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Test
+.vscode-test/
+coverage/
+
+# Misc
+*.tsbuildinfo
+.env
+.env.local

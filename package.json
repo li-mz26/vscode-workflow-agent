@@ -1,0 +1,89 @@
+{
+  "name": "vscode-workflow-agent",
+  "displayName": "Workflow Agent",
+  "description": "VSCode extension for workflow creation, editing and visualization",
+  "version": "0.1.0",
+  "publisher": "openclaw",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/openclaw/vscode-workflow-agent.git"
+  },
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onCommand:workflowAgent.openWorkflow",
+    "onCommand:workflowAgent.createWorkflow",
+    "workspaceContains:**/*.workflow.json"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "workflowAgent.openWorkflow",
+        "title": "Open Workflow Editor",
+        "category": "Workflow"
+      },
+      {
+        "command": "workflowAgent.createWorkflow",
+        "title": "Create New Workflow",
+        "category": "Workflow"
+      },
+      {
+        "command": "workflowAgent.runWorkflow",
+        "title": "Run Workflow",
+        "category": "Workflow"
+      }
+    ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "workflowAgent",
+          "title": "Workflow Agent",
+          "icon": "resources/icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "workflowAgent": [
+        {
+          "id": "workflowAgent.explorer",
+          "name": "Workflows"
+        }
+      ]
+    },
+    "menus": {
+      "explorer/context": [
+        {
+          "command": "workflowAgent.openWorkflow",
+          "when": "resourceFilename =~ /\\.workflow\\.json$/",
+          "group": "navigation"
+        }
+      ]
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "pretest": "npm run compile",
+    "lint": "eslint src --ext ts",
+    "test": "vitest",
+    "package": "vsce package",
+    "build:webview": "cd webview-ui && npm run build",
+    "dev:webview": "cd webview-ui && npm run dev"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.0",
+    "@types/vscode": "^1.85.0",
+    "@vscode/vsce": "^2.22.0",
+    "typescript": "^5.3.0",
+    "vitest": "^1.2.0"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0"
+  }
+}
