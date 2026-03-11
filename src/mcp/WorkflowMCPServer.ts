@@ -1,21 +1,38 @@
-import { Server } from '@modelcontextprotocol/sdk/server/index.js';
-import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
-import {
-  CallToolRequestSchema,
-  ListToolsRequestSchema,
-  Tool,
-  TextContent
-} from '@modelcontextprotocol/sdk/types.js';
 import * as vscode from 'vscode';
 import { WorkflowEngine, WorkflowRunner } from '../engine';
+
+// MCP SDK - use any types for cross-platform compatibility
+// @ts-ignore
+const MCPModule = require('@modelcontextprotocol/sdk/server/index.js');
+// @ts-ignore
+const TransportModule = require('@modelcontextprotocol/sdk/server/stdio.js');
+// @ts-ignore
+const TypesModule = require('@modelcontextprotocol/sdk/types.js');
+
+const Server: any = MCPModule.Server;
+const StdioServerTransport: any = TransportModule.StdioServerTransport;
+const CallToolRequestSchema: any = TypesModule.CallToolRequestSchema;
+const ListToolsRequestSchema: any = TypesModule.ListToolsRequestSchema;
+
+// Local type definitions
+type Tool = {
+  name: string;
+  description: string;
+  inputSchema: any;
+};
+
+type TextContent = {
+  type: 'text';
+  text: string;
+};
 
 /**
  * MCP Server
  * 将 Workflow Engine 的能力封装为 MCP 工具
  */
 export class WorkflowMCPServer {
-  private server: Server | null = null;
-  private transport: StdioServerTransport | null = null;
+  private server: any = null;
+  private transport: any = null;
   private isRunning = false;
   private outputChannel: vscode.OutputChannel;
 
@@ -37,20 +54,20 @@ export class WorkflowMCPServer {
     }
 
     try {
-      this.server = new (Server as any)({
+      this.server = new Server({
         name: 'workflow-agent',
         version: '0.1.0'
-      }) as Server;
+      });
 
       // 注册工具列表处理器
-      (this.server as Server).setRequestHandler(ListToolsRequestSchema, async () => {
+      this.server.setRequestHandler(ListToolsRequestSchema, async () => {
         return {
           tools: this.getTools()
         };
       });
 
       // 注册工具调用处理器
-      (this.server as Server).setRequestHandler(CallToolRequestSchema, async (request) => {
+      this.server.setRequestHandler(CallToolRequestSchema, async (request: any) => {
         return await this.handleToolCall(request.params.name, request.params.arguments);
       });
 
@@ -58,7 +75,7 @@ export class WorkflowMCPServer {
       this.transport = new StdioServerTransport();
       
       // 连接服务器
-      await (this.server as Server).connect(this.transport);
+      await this.server.connect(this.transport);
       
       this.isRunning = true;
       this.outputChannel.appendLine('MCP Server started successfully');
