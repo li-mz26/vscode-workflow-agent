@@ -12,14 +12,15 @@
     "@dnd-kit/core": "^6.0.0",
     "@dnd-kit/sortable": "^8.0.0",
     "@dnd-kit/utilities": "^3.2.0",
-    "@monaco-editor/react": "^4.6.0",
     "immer": "^10.0.0",
+    "prismjs": "^1.29.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
+    "react-simple-code-editor": "^0.13.1",
     "zustand": "^4.4.0"
   },
   "devDependencies": {
-    "@types/react": "^18.2.0",
+    "@types/prismjs": "^1.26.0",
     "@types/react-dom": "^18.2.0",
     "@types/vscode": "^1.109.0",
     "@vitejs/plugin-react": "^4.0.0",
