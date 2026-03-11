@@ -209,8 +209,13 @@ export class WorkflowEditorProvider implements vscode.CustomTextEditorProvider {
                     break;
 
                 case 'node:add':
+                    // 创建节点时同时创建外部配置文件
+                    await this.handleNodeAdd(document.fileName, message.payload.node, webviewPanel);
+                    await this.saveWorkflow(document, message.payload.workflow, workflowDir);
+                    break;
+
                 case 'node:update':
-                    // 保存节点时同时保存外部配置
+                    // 更新节点时保存外部配置
                     await this.saveNodeWithExternalConfig(document.fileName, message.payload.node);
                     await this.saveWorkflow(document, message.payload.workflow, workflowDir);
                     break;
@@ -320,6 +325,32 @@ export class WorkflowEditorProvider implements vscode.CustomTextEditorProvider {
 
     private async saveNodeWithExternalConfig(workflowPath: string, node: any): Promise<void> {
         await this.nodeConfigManager.saveNodeConfig(workflowPath, node);
+    }
+
+    /**
+     * 处理节点创建：创建外部配置文件并返回带 configRef 的节点
+     */
+    private async handleNodeAdd(workflowPath: string, node: NodeConfig, webviewPanel: vscode.WebviewPanel): Promise<void> {
+        const workflowDir = path.dirname(workflowPath);
+
+        // 只为需要外部配置的节点类型创建文件
+        if (['code', 'llm', 'switch', 'http', 'webhook'].includes(node.type)) {
+            // 创建外部配置文件
+            await this.nodeConfigManager.saveNodeConfig(workflowPath, node);
+
+            // 生成 configRef 相对路径
+            const configPath = this.nodeConfigManager.getNodeConfigPath(workflowPath, node.id, node.type);
+            const configRef = path.relative(workflowDir, configPath);
+
+            // 通知 webview 更新节点的 configRef
+            webviewPanel.webview.postMessage({
+                type: 'node:configRef',
+                payload: {
+                    nodeId: node.id,
+                    configRef
+                }
+            });
+        }
     }
 
     private async deleteNodeExternalConfig(workflowPath: string, nodeId: string, nodeType: string): Promise<void> {

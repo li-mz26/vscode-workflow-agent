@@ -150,6 +150,13 @@ function App() {
                     // 开始新执行时清除旧的执行数据
                     clearNodeExecutionData();
                     break;
+                case 'node:configRef':
+                    // 更新节点的 configRef
+                    if (message.payload?.nodeId && message.payload?.configRef) {
+                        const { updateNode } = useCanvasStore.getState();
+                        updateNode(message.payload.nodeId, { configRef: message.payload.configRef });
+                    }
+                    break;
             }
         };
         
