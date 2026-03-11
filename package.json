@@ -1,0 +1,143 @@
+{
+  "name": "vscode-workflow-agent",
+  "displayName": "Workflow Agent",
+  "description": "Visual workflow editor and executor for VSCode",
+  "version": "0.1.0",
+  "publisher": "your-publisher",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Other",
+    "Machine Learning",
+    "Visualization"
+  ],
+  "keywords": [
+    "workflow",
+    "agent",
+    "mcp",
+    "visual editor",
+    "dag"
+  ],
+  "activationEvents": [
+    "onCustomEditor:workflowAgent.workflowEditor",
+    "onCommand:workflowAgent.createWorkflow"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "customEditors": [
+      {
+        "viewType": "workflowAgent.workflowEditor",
+        "displayName": "Workflow Editor",
+        "selector": [
+          {
+            "filenamePattern": "*.workflow.json"
+          }
+        ],
+        "priority": "default"
+      }
+    ],
+    "commands": [
+      {
+        "command": "workflowAgent.createWorkflow",
+        "title": "Create New Workflow",
+        "category": "Workflow Agent",
+        "icon": "$(add)"
+      },
+      {
+        "command": "workflowAgent.openWorkflow",
+        "title": "Open Workflow",
+        "category": "Workflow Agent"
+      },
+      {
+        "command": "workflowAgent.executeWorkflow",
+        "title": "Execute Workflow",
+        "category": "Workflow Agent",
+        "icon": "$(play)"
+      },
+      {
+        "command": "workflowAgent.startMCPServer",
+        "title": "Start MCP Server",
+        "category": "Workflow Agent"
+      },
+      {
+        "command": "workflowAgent.stopMCPServer",
+        "title": "Stop MCP Server",
+        "category": "Workflow Agent"
+      }
+    ],
+    "menus": {
+      "explorer/context": [
+        {
+          "command": "workflowAgent.createWorkflow",
+          "when": "explorerResourceIsFolder",
+          "group": "2_workspace@10"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "workflowAgent.createWorkflow"
+        },
+        {
+          "command": "workflowAgent.openWorkflow"
+        },
+        {
+          "command": "workflowAgent.executeWorkflow"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "Workflow Agent",
+      "properties": {
+        "workflowAgent.mcp.enabled": {
+          "type": "boolean",
+          "default": false,
+          "description": "Enable MCP server"
+        },
+        "workflowAgent.mcp.port": {
+          "type": "number",
+          "default": 3000,
+          "description": "MCP server port"
+        },
+        "workflowAgent.llm.defaultModel": {
+          "type": "string",
+          "default": "gpt-4",
+          "description": "Default LLM model for LLM nodes"
+        },
+        "workflowAgent.llm.apiKey": {
+          "type": "string",
+          "default": "",
+          "description": "API key for LLM service"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "pretest": "npm run compile && npm run lint",
+    "lint": "eslint src --ext ts",
+    "test": "node ./out/test/runTest.js",
+    "test:engine": "ts-node src/test/engine.test.ts",
+    "build:webview": "cd webview-ui && npm run build",
+    "dev:webview": "cd webview-ui && npm run dev",
+    "package": "vsce package",
+    "publish": "vsce publish"
+  },
+  "devDependencies": {
+    "@types/node": "20.x",
+    "@types/vscode": "^1.85.0",
+    "@typescript-eslint/eslint-plugin": "^6.15.0",
+    "@typescript-eslint/parser": "^6.15.0",
+    "eslint": "^8.56.0",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.3.3",
+    "@vscode/test-electron": "^2.3.8",
+    "@vscode/vsce": "^2.22.0"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.4",
+    "zod": "^3.22.4"
+  }
+}

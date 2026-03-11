@@ -21,9 +21,6 @@ build/
 # 但保留 webview 的类型声明文件
 !webview/src/vscode.d.ts
 
-# Compiled JavaScript (source maps only, keep .js for execution)
-# But we need out/ for the extension to work, so handle carefully
-
 # Logs
 logs/
 *.log
@@ -51,9 +48,11 @@ coverage/
 .DS_Store
 Thumbs.db
 
-# Test files (keep source, ignore outputs)
-*.test.js
-*.spec.js
+# Test files runtimes
+run-tests.js
+
+# Test config (optional)
+tsconfig.test.json
 
 # Temporary files
 tmp/
@@ -77,3 +76,7 @@ out/**/*.map
 scripts/**/*.d.ts
 scripts/**/*.d.ts.map
 scripts/**/*.js.map
+
+# Old refactored code backup
+src-refactored/
+
