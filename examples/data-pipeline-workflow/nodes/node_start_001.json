@@ -1,0 +1,17 @@
+{
+  "triggerType": "manual",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "items": {
+        "type": "array",
+        "description": "输入数据列表"
+      },
+      "threshold": {
+        "type": "number",
+        "description": "阈值",
+        "default": 100
+      }
+    }
+  }
+}

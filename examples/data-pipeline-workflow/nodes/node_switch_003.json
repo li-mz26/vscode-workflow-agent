@@ -1,0 +1,15 @@
+{
+  "branches": [
+    {
+      "id": "high",
+      "name": "高优先级处理",
+      "condition": "input.total > 100"
+    },
+    {
+      "id": "low", 
+      "name": "低优先级处理",
+      "condition": "input.total <= 100"
+    }
+  ],
+  "defaultBranch": "low"
+}

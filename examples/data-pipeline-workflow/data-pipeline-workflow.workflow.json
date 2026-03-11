@@ -1,0 +1,120 @@
+{
+  "id": "wf_data_pipeline_001",
+  "name": "data-pipeline-workflow",
+  "description": "示例工作流 - 数据处理流水线：获取数据、转换、条件分支处理",
+  "version": "1.0.0",
+  "nodes": [
+    {
+      "id": "node_start_001",
+      "type": "start",
+      "position": { "x": 100, "y": 200 },
+      "configRef": "nodes/node_start_001.json",
+      "inputs": {},
+      "outputs": { "data": "object" },
+      "metadata": {
+        "name": "开始",
+        "description": "工作流入口点"
+      },
+      "data": {
+        "triggerType": "manual",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "items": {
+              "type": "array",
+              "description": "输入数据列表"
+            },
+            "threshold": {
+              "type": "number",
+              "description": "阈值"
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "node_code_002",
+      "type": "code",
+      "position": { "x": 350, "y": 200 },
+      "configRef": "nodes/node_code_002.py",
+      "inputs": { "data": "object" },
+      "outputs": { "processed": "object" },
+      "metadata": {
+        "name": "数据处理",
+        "description": "处理并转换输入数据"
+      },
+      "data": {
+        "language": "python",
+        "code": "def main(inputs, context):\n    items = inputs.get('items', [])\n    threshold = inputs.get('threshold', 100)\n    \n    if not items:\n        return {\n            'total': 0,\n            'average': 0,\n            'count': 0,\n            'category': 'empty',\n            'threshold': threshold\n        }\n    \n    total = sum(items)\n    average = total / len(items)\n    count = len(items)\n    category = 'high' if total > threshold else 'low'\n    \n    return {\n        'total': total,\n        'average': round(average, 2),\n        'count': count,\n        'category': category,\n        'threshold': threshold,\n        'items': items\n    }",
+        "entryFunction": "main",
+        "timeout": 30
+      }
+    },
+    {
+      "id": "node_switch_003",
+      "type": "switch",
+      "position": { "x": 600, "y": 200 },
+      "configRef": "nodes/node_switch_003.json",
+      "inputs": { "data": "object" },
+      "outputs": { 
+        "high": "object", 
+        "low": "object",
+        "default": "object"
+      },
+      "metadata": {
+        "name": "条件分支",
+        "description": "根据处理结果选择分支"
+      },
+      "data": {
+        "branches": [
+          { "id": "high", "name": "高优先级处理", "condition": "input.total > 100" },
+          { "id": "low", "name": "低优先级处理", "condition": "input.total <= 100" }
+        ],
+        "defaultBranch": "default"
+      }
+    },
+    {
+      "id": "node_end_004",
+      "type": "end",
+      "position": { "x": 900, "y": 200 },
+      "configRef": "nodes/node_end_004.json",
+      "inputs": { "result": "object" },
+      "outputs": {},
+      "metadata": {
+        "name": "结束",
+        "description": "工作流结束"
+      },
+      "data": {}
+    }
+  ],
+  "edges": [
+    {
+      "id": "edge_001",
+      "source": { "nodeId": "node_start_001", "portId": "output" },
+      "target": { "nodeId": "node_code_002", "portId": "input" }
+    },
+    {
+      "id": "edge_002",
+      "source": { "nodeId": "node_code_002", "portId": "output" },
+      "target": { "nodeId": "node_switch_003", "portId": "input" }
+    },
+    {
+      "id": "edge_003",
+      "source": { "nodeId": "node_switch_003", "portId": "high" },
+      "target": { "nodeId": "node_end_004", "portId": "input" },
+      "condition": "input.total > 100"
+    },
+    {
+      "id": "edge_004",
+      "source": { "nodeId": "node_switch_003", "portId": "low" },
+      "target": { "nodeId": "node_end_004", "portId": "input" },
+      "condition": "input.total <= 100"
+    }
+  ],
+  "metadata": {
+    "createdAt": "2026-03-11T04:00:00.000Z",
+    "updatedAt": "2026-03-11T04:00:00.000Z",
+    "author": "vscode-workflow-agent",
+    "tags": ["example", "data-pipeline"]
+  }
+}

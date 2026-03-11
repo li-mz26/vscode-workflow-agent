@@ -20,6 +20,7 @@ export class WorkflowRunner {
   private abortController: AbortController | null = null;
   private nodeResults: Map<string, NodeExecutionResult> = new Map();
   private outputChannel: vscode.OutputChannel;
+  private initialInputs: Record<string, unknown> = {};
 
   constructor(
     private engine: WorkflowEngine,
@@ -47,6 +48,7 @@ export class WorkflowRunner {
     this.executionStatus = ExecutionStatus.RUNNING;
     this.abortController = new AbortController();
     this.nodeResults.clear();
+    this.initialInputs = initialInputs;
 
     this.outputChannel.appendLine(`[${startTime.toISOString()}] Starting workflow execution: ${wf.name} (${executionId})`);
 
@@ -135,6 +137,11 @@ export class WorkflowRunner {
     node: Node,
     context: ExecutionContext
   ): Promise<Record<string, unknown>> {
+    // 开始节点接收初始输入
+    if (node.type === 'start') {
+      return { ...this.initialInputs };
+    }
+
     const inputs: Record<string, unknown> = {};
     
     // 获取所有输入边
