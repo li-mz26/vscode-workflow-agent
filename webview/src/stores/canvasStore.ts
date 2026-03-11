@@ -17,6 +17,8 @@ export interface Port {
     name: string;
     type: 'data' | 'control';
     dataType: string;
+    required?: boolean;
+    description?: string;
 }
 
 export interface NodeData {
