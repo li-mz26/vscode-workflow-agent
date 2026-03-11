@@ -66,7 +66,7 @@ export class WorkflowEditorProvider implements vscode.CustomTextEditorProvider {
     webviewPanel.webview.options = {
       enableScripts: true,
       localResourceRoots: [
-        vscode.Uri.file(path.join(this.context.extensionPath, 'webview-ui', 'dist'))
+        vscode.Uri.file(path.join(this.context.extensionPath, 'webview'))
       ]
     };
 
@@ -127,6 +127,10 @@ export class WorkflowEditorProvider implements vscode.CustomTextEditorProvider {
     webviewPanel.webview.onDidReceiveMessage(async (message: WebViewMessage) => {
       try {
         switch (message.type) {
+          case 'getWorkflow':
+            this.handleGetWorkflow(webviewPanel);
+            break;
+
           case 'addNode':
             this.handleAddNode(message.payload as { type: string; position: { x: number; y: number } });
             break;
@@ -137,6 +141,10 @@ export class WorkflowEditorProvider implements vscode.CustomTextEditorProvider {
 
           case 'updateNode':
             this.handleUpdateNode(message.payload as { nodeId: string; data: any });
+            break;
+
+          case 'updateWorkflow':
+            await this.handleUpdateWorkflow(message.payload as Workflow, document);
             break;
 
           case 'addEdge':
@@ -153,6 +161,10 @@ export class WorkflowEditorProvider implements vscode.CustomTextEditorProvider {
 
           case 'saveWorkflow':
             await this.handleSaveWorkflow(document);
+            break;
+
+          case 'validateWorkflow':
+            this.handleValidateWorkflow(webviewPanel);
             break;
 
           case 'executeWorkflow':
@@ -173,6 +185,54 @@ export class WorkflowEditorProvider implements vscode.CustomTextEditorProvider {
         });
       }
     });
+  }
+
+  /**
+   * 处理获取工作流
+   */
+  private handleGetWorkflow(webviewPanel: vscode.WebviewPanel): void {
+    const workflow = this.engine.getCurrentWorkflow();
+    if (workflow) {
+      webviewPanel.webview.postMessage({
+        type: 'workflowLoaded',
+        payload: workflow
+      });
+    }
+  }
+
+  /**
+   * 处理更新整个工作流（从 JSON 编辑器）
+   */
+  private async handleUpdateWorkflow(workflow: Workflow, document: vscode.TextDocument): Promise<void> {
+    // 验证工作流
+    const errors = this.engine.validateWorkflow(workflow);
+    if (errors.length > 0) {
+      vscode.window.showWarningMessage(`Workflow validation warnings: ${errors.join(', ')}`);
+    }
+    
+    // 更新文档
+    const edit = new vscode.WorkspaceEdit();
+    edit.replace(
+      document.uri,
+      new vscode.Range(0, 0, document.lineCount, 0),
+      JSON.stringify(workflow, null, 2)
+    );
+    await vscode.workspace.applyEdit(edit);
+  }
+
+  /**
+   * 处理验证工作流
+   */
+  private handleValidateWorkflow(webviewPanel: vscode.WebviewPanel): void {
+    const workflow = this.engine.getCurrentWorkflow();
+    if (!workflow) return;
+    
+    const errors = this.engine.validateWorkflow(workflow);
+    if (errors.length === 0) {
+      vscode.window.showInformationMessage('✅ Workflow is valid!');
+    } else {
+      vscode.window.showErrorMessage(`❌ Validation errors:\n${errors.join('\n')}`);
+    }
   }
 
   /**
@@ -271,46 +331,18 @@ export class WorkflowEditorProvider implements vscode.CustomTextEditorProvider {
    * 生成 Webview HTML
    */
   private getHtmlForWebview(webview: vscode.Webview): string {
-    // 在开发模式下使用本地开发服务器
-    const isDevelopment = process.env.NODE_ENV === 'development';
+    // 使用本地 webview 目录的文件
+    const webviewPath = path.join(this.context.extensionPath, 'webview');
     
-    if (isDevelopment) {
-      return `<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Workflow Editor</title>
-</head>
-<body>
-    <div id="root"></div>
-    <script type="module" src="http://localhost:5173/src/main.tsx"></script>
-</body>
-</html>`;
-    }
-
-    // 生产模式：使用构建后的文件
-    const scriptUri = webview.asWebviewUri(
-      vscode.Uri.file(path.join(this.context.extensionPath, 'webview-ui', 'dist', 'assets', 'index.js'))
-    );
-    const styleUri = webview.asWebviewUri(
-      vscode.Uri.file(path.join(this.context.extensionPath, 'webview-ui', 'dist', 'assets', 'index.css'))
-    );
-
-    return `<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src ${webview.cspSource}; style-src ${webview.cspSource} 'unsafe-inline';">
-    <link rel="stylesheet" href="${styleUri}">
-    <title>Workflow Editor</title>
-</head>
-<body>
-    <div id="root"></div>
-    <script type="module" src="${scriptUri}"></script>
-</body>
-</html>`;
+    // 读取 HTML 模板
+    const htmlPath = path.join(webviewPath, 'index.html');
+    let html = fs.readFileSync(htmlPath, 'utf-8');
+    
+    // 替换资源路径
+    const scriptUri = webview.asWebviewUri(vscode.Uri.file(path.join(webviewPath, 'index.js')));
+    html = html.replace('./index.js', scriptUri.toString());
+    
+    return html;
   }
 
   /**
