@@ -331,18 +331,33 @@ export class WorkflowEditorProvider implements vscode.CustomTextEditorProvider {
    * 生成 Webview HTML
    */
   private getHtmlForWebview(webview: vscode.Webview): string {
-    // 使用本地 webview 目录的文件
-    const webviewPath = path.join(this.context.extensionPath, 'webview');
+    const scriptUri = webview.asWebviewUri(
+      vscode.Uri.file(path.join(this.context.extensionPath, 'webview', 'index.js'))
+    );
     
-    // 读取 HTML 模板
-    const htmlPath = path.join(webviewPath, 'index.html');
-    let html = fs.readFileSync(htmlPath, 'utf-8');
-    
-    // 替换资源路径
-    const scriptUri = webview.asWebviewUri(vscode.Uri.file(path.join(webviewPath, 'index.js')));
-    html = html.replace('./index.js', scriptUri.toString());
-    
-    return html;
+    return `<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src ${webview.cspSource}; style-src ${webview.cspSource} 'unsafe-inline'; img-src ${webview.cspSource} https:;">
+    <title>Workflow Editor</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: var(--vscode-editor-background);
+            color: var(--vscode-editor-foreground);
+            overflow: hidden;
+        }
+        #root { width: 100vw; height: 100vh; }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+    <script src="${scriptUri}"></script>
+</body>
+</html>`;
   }
 
   /**
