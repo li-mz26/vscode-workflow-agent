@@ -46,7 +46,7 @@ export class WorkflowMCPServer {
           capabilities: {
             tools: {}
           }
-        }
+        } as any
       );
 
       // 注册工具列表处理器
