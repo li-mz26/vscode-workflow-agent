@@ -3,6 +3,7 @@ import { Canvas } from './components/Canvas';
 import { NodePalette } from './components/NodePalette';
 import { PropertiesPanel } from './components/PropertiesPanel';
 import { Toolbar } from './components/Toolbar';
+import { JsonEditor } from './components/JsonEditor';
 import { useCanvasStore } from './stores/canvasStore';
 import { NodeRegistry } from '../../src/core/node/NodeRegistry';
 
@@ -202,10 +203,9 @@ function App() {
     }, [viewMode, workflow]);
 
     // 处理 JSON 内容变化
-    const handleJsonChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
-        const newContent = e.target.value;
+    const handleJsonChange = useCallback((newContent: string) => {
         setJsonContent(newContent);
-        
+
         try {
             const parsed = JSON.parse(newContent);
             setWorkflow(parsed);
@@ -531,24 +531,10 @@ function App() {
                         </>
                     ) : (
                         /* JSON 文本编辑器 */
-                        <textarea
+                        <JsonEditor
                             value={jsonContent}
                             onChange={handleJsonChange}
-                            style={{
-                                width: '100%',
-                                height: '100%',
-                                border: 'none',
-                                outline: 'none',
-                                padding: '16px',
-                                fontFamily: 'var(--vscode-editor-font-family), monospace',
-                                fontSize: 'var(--vscode-editor-font-size)',
-                                lineHeight: '1.5',
-                                background: 'var(--vscode-editor-background)',
-                                color: 'var(--vscode-editor-foreground)',
-                                resize: 'none',
-                                tabSize: 2
-                            }}
-                            spellCheck={false}
+                            onError={setJsonError}
                         />
                     )}
                 </div>
