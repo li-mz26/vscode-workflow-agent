@@ -1,0 +1,210 @@
+{
+  "id": "wf_monitoring_alert",
+  "name": "监控告警",
+  "description": "监控系统指标，异常时发送告警通知",
+  "version": "1.0.0",
+  "nodes": [
+    {
+      "id": "node_schedule",
+      "type": "schedule",
+      "position": { "x": 50, "y": 200 },
+      "inputs": [],
+      "outputs": [
+        { "id": "trigger", "name": "trigger", "type": "data", "dataType": "object", "required": true }
+      ],
+      "metadata": {
+        "name": "定时触发",
+        "description": "每5分钟检查一次",
+        "icon": "clock",
+        "color": "#FF5722"
+      },
+      "data": {
+        "cronExpression": "*/5 * * * *",
+        "timezone": "Asia/Shanghai",
+        "enabled": true
+      }
+    },
+    {
+      "id": "node_fetch_metrics",
+      "type": "http",
+      "position": { "x": 300, "y": 200 },
+      "inputs": [
+        { "id": "input", "name": "input", "type": "data", "dataType": "any", "required": false }
+      ],
+      "outputs": [
+        { "id": "status", "name": "status", "type": "data", "dataType": "number", "required": true },
+        { "id": "body", "name": "body", "type": "data", "dataType": "string", "required": true },
+        { "id": "json", "name": "json", "type": "data", "dataType": "object", "required": false }
+      ],
+      "metadata": {
+        "name": "获取指标",
+        "description": "从监控系统拉取指标",
+        "icon": "globe",
+        "color": "#607D8B"
+      },
+      "data": {
+        "method": "GET",
+        "url": "https://api.monitoring.example.com/metrics",
+        "headers": {
+          "Authorization": "Bearer {{monitoring_token}}",
+          "Accept": "application/json"
+        },
+        "timeout": 10000,
+        "retryCount": 2
+      }
+    },
+    {
+      "id": "node_analyze",
+      "type": "code",
+      "position": { "x": 550, "y": 200 },
+      "inputs": [
+        { "id": "input", "name": "input", "type": "data", "dataType": "any", "required": false }
+      ],
+      "outputs": [
+        { "id": "output", "name": "output", "type": "data", "dataType": "any", "required": true }
+      ],
+      "metadata": {
+        "name": "分析指标",
+        "description": "检查是否超出阈值",
+        "icon": "code",
+        "color": "#2196F3"
+      },
+      "data": {
+        "code": "def main(ctx):\n    metrics = ctx.get('input', {})\n    \n    # 阈值配置\n    thresholds = {\n        'cpu_percent': 80,\n        'memory_percent': 85,\n        'disk_percent': 90,\n        'error_rate': 5  # 百分比\n    }\n    \n    alerts = []\n    for metric, value in metrics.items():\n        if metric in thresholds and value > thresholds[metric]:\n            alerts.append({\n                'metric': metric,\n                'value': value,\n                'threshold': thresholds[metric],\n                'severity': 'critical' if value > thresholds[metric] * 1.2 else 'warning'\n            })\n    \n    return {\n        'alerts': alerts,\n        'has_alert': len(alerts) > 0,\n        'timestamp': __import__('datetime').datetime.now().isoformat(),\n        'raw_metrics': metrics\n    }",
+        "timeout": 30
+      }
+    },
+    {
+      "id": "node_check_alert",
+      "type": "switch",
+      "position": { "x": 800, "y": 200 },
+      "inputs": [
+        { "id": "input", "name": "input", "type": "data", "dataType": "any", "required": true }
+      ],
+      "outputs": [
+        { "id": "alert", "name": "告警", "type": "control", "dataType": "any", "required": false },
+        { "id": "normal", "name": "正常", "type": "control", "dataType": "any", "required": false }
+      ],
+      "metadata": {
+        "name": "检查告警",
+        "description": "判断是否需要发送告警",
+        "icon": "split-horizontal",
+        "color": "#FF9800"
+      },
+      "data": {
+        "conditions": [
+          { "name": "需要告警", "expression": "input.has_alert == true", "target": "alert" }
+        ],
+        "defaultTarget": "normal"
+      }
+    },
+    {
+      "id": "node_webhook",
+      "type": "webhook",
+      "position": { "x": 1050, "y": 100 },
+      "inputs": [
+        { "id": "input", "name": "input", "type": "data", "dataType": "any", "required": false }
+      ],
+      "outputs": [
+        { "id": "sent", "name": "sent", "type": "data", "dataType": "boolean", "required": true }
+      ],
+      "metadata": {
+        "name": "发送告警",
+        "description": "发送通知到 Slack",
+        "icon": "bell",
+        "color": "#E91E63"
+      },
+      "data": {
+        "provider": "slack",
+        "webhookUrl": "{{slack_webhook_url}}",
+        "title": "🚨 系统监控告警",
+        "message": "检测到异常指标，请立即检查",
+        "severity": "error",
+        "fields": [],
+        "mentions": []
+      }
+    },
+    {
+      "id": "node_log_normal",
+      "type": "code",
+      "position": { "x": 1050, "y": 300 },
+      "inputs": [
+        { "id": "input", "name": "input", "type": "data", "dataType": "any", "required": false }
+      ],
+      "outputs": [
+        { "id": "output", "name": "output", "type": "data", "dataType": "any", "required": true }
+      ],
+      "metadata": {
+        "name": "记录正常",
+        "description": "记录正常状态日志",
+        "icon": "code",
+        "color": "#4CAF50"
+      },
+      "data": {
+        "code": "def main(ctx):\n    data = ctx.get('input', {})\n    print(f\"[INFO] 系统正常 - {data.get('timestamp')}\")\n    return {'status': 'normal', 'logged': True}",
+        "timeout": 30
+      }
+    },
+    {
+      "id": "node_end",
+      "type": "end",
+      "position": { "x": 1300, "y": 200 },
+      "inputs": [
+        { "id": "result", "name": "result", "type": "data", "dataType": "any", "required": false }
+      ],
+      "outputs": [],
+      "metadata": {
+        "name": "结束",
+        "description": "工作流出口",
+        "icon": "stop",
+        "color": "#F44336"
+      },
+      "data": { "outputMapping": {} }
+    }
+  ],
+  "edges": [
+    {
+      "id": "edge_schedule_fetch",
+      "source": { "nodeId": "node_schedule", "portId": "trigger" },
+      "target": { "nodeId": "node_fetch_metrics", "portId": "input" }
+    },
+    {
+      "id": "edge_fetch_analyze",
+      "source": { "nodeId": "node_fetch_metrics", "portId": "json" },
+      "target": { "nodeId": "node_analyze", "portId": "input" }
+    },
+    {
+      "id": "edge_analyze_check",
+      "source": { "nodeId": "node_analyze", "portId": "output" },
+      "target": { "nodeId": "node_check_alert", "portId": "input" }
+    },
+    {
+      "id": "edge_check_webhook",
+      "source": { "nodeId": "node_check_alert", "portId": "alert" },
+      "target": { "nodeId": "node_webhook", "portId": "input" }
+    },
+    {
+      "id": "edge_check_log",
+      "source": { "nodeId": "node_check_alert", "portId": "normal" },
+      "target": { "nodeId": "node_log_normal", "portId": "input" }
+    },
+    {
+      "id": "edge_webhook_end",
+      "source": { "nodeId": "node_webhook", "portId": "sent" },
+      "target": { "nodeId": "node_end", "portId": "result" }
+    },
+    {
+      "id": "edge_log_end",
+      "source": { "nodeId": "node_log_normal", "portId": "output" },
+      "target": { "nodeId": "node_end", "portId": "result" }
+    }
+  ],
+  "variables": [
+    { "name": "monitoring_token", "type": "string", "defaultValue": "" },
+    { "name": "slack_webhook_url", "type": "string", "defaultValue": "" }
+  ],
+  "settings": {
+    "timeout": 120,
+    "logLevel": "info"
+  }
+}

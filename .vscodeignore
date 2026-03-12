@@ -1,0 +1,58 @@
+# Source files (only compiled output needed)
+src/
+webview/src/
+tests/
+scripts/
+
+# Build artifacts (rebuilt during packaging)
+# Note: out/webview/ IS needed for the webview to work
+
+# Development files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Dependencies (installed during build)
+node_modules/
+webview/node_modules/
+
+# Logs and temp files
+logs/
+*.log
+npm-debug.log*
+tmp/
+temp/
+*.tmp
+
+# Git
+.git/
+.gitignore
+
+# Documentation (not needed in extension)
+*.md
+!readme.md
+
+# Source maps (for debugging only)
+*.map
+
+# Test files
+*.test.ts
+*.spec.ts
+*.test.js
+*.spec.js
+
+# Lock files
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+
+# Archives
+*.tar.gz
+*.zip
+
+# CI/CD
+.github/
+.vscode-test/

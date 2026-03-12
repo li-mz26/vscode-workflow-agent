@@ -1,0 +1,80 @@
+{
+  "id": "wf_hello_world",
+  "name": "Hello World",
+  "description": "最简单的示例工作流：开始 → 代码执行 → 结束",
+  "version": "1.0.0",
+  "nodes": [
+    {
+      "id": "node_start",
+      "type": "start",
+      "position": { "x": 50, "y": 150 },
+      "inputs": [],
+      "outputs": [
+        { "id": "trigger", "name": "trigger", "type": "data", "dataType": "object", "required": true }
+      ],
+      "metadata": {
+        "name": "开始",
+        "description": "工作流入口",
+        "icon": "play",
+        "color": "#4CAF50"
+      },
+      "data": { "triggerType": "manual" }
+    },
+    {
+      "id": "node_hello",
+      "type": "code",
+      "position": { "x": 300, "y": 150 },
+      "inputs": [
+        { "id": "input", "name": "input", "type": "data", "dataType": "any", "required": false }
+      ],
+      "outputs": [
+        { "id": "output", "name": "output", "type": "data", "dataType": "any", "required": true }
+      ],
+      "metadata": {
+        "name": "生成问候语",
+        "description": "返回 Hello World 消息",
+        "icon": "code",
+        "color": "#2196F3"
+      },
+      "data": {
+        "code": "def main(ctx):\n    name = ctx.get('name', 'World')\n    return {\n        'message': f'Hello, {name}!',\n        'timestamp': __import__('datetime').datetime.now().isoformat()\n    }",
+        "timeout": 30
+      }
+    },
+    {
+      "id": "node_end",
+      "type": "end",
+      "position": { "x": 550, "y": 150 },
+      "inputs": [
+        { "id": "result", "name": "result", "type": "data", "dataType": "any", "required": false }
+      ],
+      "outputs": [],
+      "metadata": {
+        "name": "结束",
+        "description": "工作流出口",
+        "icon": "stop",
+        "color": "#F44336"
+      },
+      "data": { "outputMapping": {} }
+    }
+  ],
+  "edges": [
+    {
+      "id": "edge_start_hello",
+      "source": { "nodeId": "node_start", "portId": "trigger" },
+      "target": { "nodeId": "node_hello", "portId": "input" }
+    },
+    {
+      "id": "edge_hello_end",
+      "source": { "nodeId": "node_hello", "portId": "output" },
+      "target": { "nodeId": "node_end", "portId": "result" }
+    }
+  ],
+  "variables": [
+    { "name": "name", "type": "string", "defaultValue": "World" }
+  ],
+  "settings": {
+    "timeout": 60,
+    "logLevel": "info"
+  }
+}
