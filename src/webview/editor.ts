@@ -192,6 +192,7 @@ export class WorkflowEditorProvider implements vscode.CustomEditorProvider<Workf
       display: flex;
       flex-direction: column;
       gap: 5px;
+      z-index: 10;
     }
     .toolbar-btn {
       width: 50px;
@@ -217,16 +218,40 @@ export class WorkflowEditorProvider implements vscode.CustomEditorProvider<Workf
       flex: 1;
       position: relative;
       overflow: hidden;
+      cursor: default;
     }
+    .canvas-container.panning {
+      cursor: grab;
+    }
+    .canvas-container.panning.active {
+      cursor: grabbing;
+    }
+    
     #canvas {
       width: 100%;
       height: 100%;
       position: relative;
+      transform-origin: 0 0;
+    }
+    
+    .canvas-bg {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
       background-image: 
-        linear-gradient(var(--vscode-editorRuler-foreground) 1px, transparent 1px),
-        linear-gradient(90deg, var(--vscode-editorRuler-foreground) 1px, transparent 1px);
+        radial-gradient(circle, var(--vscode-editorRuler-foreground) 1px, transparent 1px);
       background-size: 20px 20px;
-      background-position: -1px -1px;
+      pointer-events: none;
+    }
+    
+    .nodes-container {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
     }
     
     /* 节点样式 */
@@ -238,13 +263,18 @@ export class WorkflowEditorProvider implements vscode.CustomEditorProvider<Workf
       border-radius: 8px;
       cursor: move;
       user-select: none;
+      transition: box-shadow 0.2s;
     }
     .node:hover {
       border-color: var(--vscode-focusBorder);
-      box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+      box-shadow: 0 4px 12px rgba(0,0,0,0.3);
     }
     .node.selected {
       border-color: var(--vscode-button-background);
+      box-shadow: 0 0 0 2px var(--vscode-button-background);
+    }
+    .node.dragging {
+      opacity: 0.8;
     }
     .node-header {
       padding: 8px 12px;
@@ -264,6 +294,7 @@ export class WorkflowEditorProvider implements vscode.CustomEditorProvider<Workf
       align-items: center;
       justify-content: center;
       font-size: 10px;
+      color: white;
     }
     .node-type-start .node-type-icon { background: #4caf50; }
     .node-type-end .node-type-icon { background: #f44336; }
@@ -271,6 +302,8 @@ export class WorkflowEditorProvider implements vscode.CustomEditorProvider<Workf
     .node-type-llm .node-type-icon { background: #9c27b0; }
     .node-type-switch .node-type-icon { background: #ff9800; }
     .node-type-parallel .node-type-icon { background: #00bcd4; }
+    .node-type-http .node-type-icon { background: #607d8b; }
+    .node-type-transform .node-type-icon { background: #795548; }
     
     .node-body {
       padding: 10px 12px;
@@ -281,36 +314,49 @@ export class WorkflowEditorProvider implements vscode.CustomEditorProvider<Workf
     /* 端口 */
     .port {
       position: absolute;
-      width: 12px;
-      height: 12px;
+      width: 14px;
+      height: 14px;
       background: var(--vscode-button-background);
+      border: 2px solid var(--vscode-editorWidget-background);
       border-radius: 50%;
       cursor: crosshair;
+      z-index: 5;
     }
     .port:hover {
-      transform: scale(1.3);
+      transform: scale(1.4);
+      background: var(--vscode-button-hoverBackground);
     }
-    .port-input { left: -6px; top: 50%; transform: translateY(-50%); }
-    .port-output { right: -6px; top: 50%; transform: translateY(-50%); }
+    .port-input { left: -7px; top: 50%; margin-top: -7px; }
+    .port-output { right: -7px; top: 50%; margin-top: -7px; }
     
     /* 边（连线） */
-    .edge {
+    #edges-svg {
       position: absolute;
-      pointer-events: none;
       top: 0;
       left: 0;
       width: 100%;
       height: 100%;
+      pointer-events: none;
+      overflow: visible;
     }
-    .edge path {
+    #edges-svg path {
       fill: none;
       stroke: var(--vscode-editor-foreground);
       stroke-width: 2;
-      opacity: 0.6;
+      opacity: 0.5;
     }
-    .edge.selected path {
+    #edges-svg path:hover {
       stroke: var(--vscode-button-background);
       stroke-width: 3;
+      opacity: 1;
+    }
+    
+    /* 临时连线 */
+    #temp-edge {
+      stroke: var(--vscode-button-background);
+      stroke-width: 2;
+      stroke-dasharray: 5, 5;
+      opacity: 0.8;
     }
     
     /* 顶部工具栏 */
@@ -319,20 +365,32 @@ export class WorkflowEditorProvider implements vscode.CustomEditorProvider<Workf
       top: 10px;
       right: 10px;
       display: flex;
-      gap: 10px;
+      gap: 8px;
       z-index: 100;
     }
     .top-bar button {
-      padding: 6px 14px;
+      padding: 6px 12px;
       background: var(--vscode-button-background);
       color: var(--vscode-button-foreground);
       border: none;
       border-radius: 4px;
       cursor: pointer;
       font-size: 12px;
+      display: flex;
+      align-items: center;
+      gap: 4px;
     }
     .top-bar button:hover {
       background: var(--vscode-button-hoverBackground);
+    }
+    .zoom-display {
+      padding: 6px 12px;
+      background: var(--vscode-editorWidget-background);
+      color: var(--vscode-foreground);
+      border-radius: 4px;
+      font-size: 12px;
+      min-width: 60px;
+      text-align: center;
     }
     
     /* 右侧属性面板 */
@@ -342,6 +400,7 @@ export class WorkflowEditorProvider implements vscode.CustomEditorProvider<Workf
       border-left: 1px solid var(--vscode-sideBar-border);
       padding: 15px;
       overflow-y: auto;
+      z-index: 10;
     }
     .properties-panel h3 {
       margin-bottom: 15px;
@@ -370,6 +429,34 @@ export class WorkflowEditorProvider implements vscode.CustomEditorProvider<Workf
     .property-group input:focus, .property-group textarea:focus, .property-group select:focus {
       outline: none;
       border-color: var(--vscode-focusBorder);
+    }
+    
+    .btn-danger {
+      width: 100%;
+      margin-top: 20px;
+      padding: 8px;
+      background: #d32f2f;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 12px;
+    }
+    .btn-danger:hover {
+      background: #b71c1c;
+    }
+    
+    /* 提示信息 */
+    .hint {
+      position: absolute;
+      bottom: 10px;
+      left: 10px;
+      padding: 8px 12px;
+      background: var(--vscode-editorWidget-background);
+      border-radius: 4px;
+      font-size: 11px;
+      color: var(--vscode-descriptionForeground);
+      z-index: 100;
     }
   </style>
 </head>
@@ -410,16 +497,26 @@ export class WorkflowEditorProvider implements vscode.CustomEditorProvider<Workf
       </button>
     </div>
     
-    <div class="canvas-container">
+    <div class="canvas-container" id="canvas-container">
       <div class="top-bar">
+        <div class="zoom-display" id="zoom-display">100%</div>
+        <button id="btn-zoom-in" title="放大">+</button>
+        <button id="btn-zoom-out" title="缩小">-</button>
+        <button id="btn-fit" title="适应画布">⊡</button>
         <button id="btn-run">▶ 运行</button>
         <button id="btn-save">💾 保存</button>
-        <button id="btn-zoom-in">+</button>
-        <button id="btn-zoom-out">-</button>
-        <button id="btn-fit">适应</button>
       </div>
+      
       <div id="canvas">
-        <svg class="edge" id="edges-svg"></svg>
+        <div class="canvas-bg"></div>
+        <svg id="edges-svg">
+          <path id="temp-edge" style="display: none;"/>
+        </svg>
+        <div class="nodes-container" id="nodes-container"></div>
+      </div>
+      
+      <div class="hint">
+        中键拖动画布 | 滚轮缩放 | Delete 删除节点
       </div>
     </div>
     
@@ -435,14 +532,31 @@ export class WorkflowEditorProvider implements vscode.CustomEditorProvider<Workf
   
   <script nonce="${nonce}">
     const vscode = acquireVsCodeApi();
+    
+    // 状态
     let workflow = null;
     let selectedNode = null;
-    let selectedEdge = null;
     let scale = 1;
     let offset = { x: 0, y: 0 };
-    let isDragging = false;
+    const MIN_SCALE = 0.1;
+    const MAX_SCALE = 3;
+    const SCALE_STEP = 0.1;
+    
+    // 拖拽状态
+    let isPanning = false;
+    let panStart = { x: 0, y: 0 };
+    let isDraggingNode = false;
     let dragStart = { x: 0, y: 0 };
+    let nodeStartPos = { x: 0, y: 0 };
     let connectingPort = null;
+    
+    // DOM 元素
+    const canvasContainer = document.getElementById('canvas-container');
+    const canvas = document.getElementById('canvas');
+    const nodesContainer = document.getElementById('nodes-container');
+    const edgesSvg = document.getElementById('edges-svg');
+    const tempEdge = document.getElementById('temp-edge');
+    const zoomDisplay = document.getElementById('zoom-display');
     
     // 初始化
     window.addEventListener('message', event => {
@@ -451,6 +565,7 @@ export class WorkflowEditorProvider implements vscode.CustomEditorProvider<Workf
         case 'init':
           workflow = message.workflow;
           render();
+          fitToScreen();
           break;
         case 'saved':
           console.log('Workflow saved');
@@ -458,10 +573,176 @@ export class WorkflowEditorProvider implements vscode.CustomEditorProvider<Workf
       }
     });
     
-    // 通知 VSCode 准备好了
     vscode.postMessage({ type: 'ready' });
     
-    // 工具栏按钮
+    // ========== 画布变换 ==========
+    
+    function updateTransform() {
+      canvas.style.transform = \`translate(\${offset.x}px, \${offset.y}px) scale(\${scale})\`;
+      zoomDisplay.textContent = Math.round(scale * 100) + '%';
+    }
+    
+    function screenToCanvas(screenX, screenY) {
+      const rect = canvasContainer.getBoundingClientRect();
+      return {
+        x: (screenX - rect.left - offset.x) / scale,
+        y: (screenY - rect.top - offset.y) / scale
+      };
+    }
+    
+    function setScale(newScale, centerX, centerY) {
+      const oldScale = scale;
+      scale = Math.max(MIN_SCALE, Math.min(MAX_SCALE, newScale));
+      
+      // 以鼠标位置为中心缩放
+      if (centerX !== undefined && centerY !== undefined) {
+        offset.x = centerX - (centerX - offset.x) * (scale / oldScale);
+        offset.y = centerY - (centerY - offset.y) * (scale / oldScale);
+      }
+      
+      updateTransform();
+    }
+    
+    function fitToScreen() {
+      if (!workflow || workflow.nodes.length === 0) return;
+      
+      const rect = canvasContainer.getBoundingClientRect();
+      const padding = 50;
+      
+      // 计算节点边界
+      let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+      workflow.nodes.forEach(node => {
+        minX = Math.min(minX, node.position.x);
+        minY = Math.min(minY, node.position.y);
+        maxX = Math.max(maxX, node.position.x + 150);
+        maxY = Math.max(maxY, node.position.y + 80);
+      });
+      
+      const contentWidth = maxX - minX;
+      const contentHeight = maxY - minY;
+      const availableWidth = rect.width - padding * 2;
+      const availableHeight = rect.height - padding * 2;
+      
+      scale = Math.min(availableWidth / contentWidth, availableHeight / contentHeight, 1);
+      scale = Math.max(MIN_SCALE, Math.min(MAX_SCALE, scale));
+      
+      offset.x = (availableWidth - contentWidth * scale) / 2 - minX * scale + padding;
+      offset.y = (availableHeight - contentHeight * scale) / 2 - minY * scale + padding;
+      
+      updateTransform();
+    }
+    
+    // ========== 鼠标事件 ==========
+    
+    // 中键拖动画布
+    canvasContainer.addEventListener('mousedown', e => {
+      if (e.button === 1) { // 中键
+        isPanning = true;
+        panStart = { x: e.clientX - offset.x, y: e.clientY - offset.y };
+        canvasContainer.classList.add('panning', 'active');
+        e.preventDefault();
+      } else if (e.button === 0 && e.target === canvas || e.target.classList.contains('canvas-bg')) {
+        // 左键点击空白区域取消选择
+        selectNode(null);
+      }
+    });
+    
+    document.addEventListener('mousemove', e => {
+      if (isPanning) {
+        offset.x = e.clientX - panStart.x;
+        offset.y = e.clientY - panStart.y;
+        updateTransform();
+      }
+      
+      if (isDraggingNode && selectedNode) {
+        const canvasPos = screenToCanvas(e.clientX, e.clientY);
+        selectedNode.position.x = nodeStartPos.x + (canvasPos.x - dragStart.x);
+        selectedNode.position.y = nodeStartPos.y + (canvasPos.y - dragStart.y);
+        renderNodes();
+        renderEdges();
+      }
+      
+      if (connectingPort) {
+        const nodeEl = document.querySelector(\`.node[data-id="\${connectingPort.nodeId}"]\`);
+        if (nodeEl) {
+          const rect = nodeEl.getBoundingClientRect();
+          const startX = (rect.right - canvasContainer.getBoundingClientRect().left - offset.x) / scale;
+          const startY = (rect.top + rect.height / 2 - canvasContainer.getBoundingClientRect().top - offset.y) / scale;
+          const canvasPos = screenToCanvas(e.clientX, e.clientY);
+          
+          tempEdge.setAttribute('d', \`M \${startX} \${startY} L \${canvasPos.x} \${canvasPos.y}\`);
+          tempEdge.style.display = 'block';
+        }
+      }
+    });
+    
+    document.addEventListener('mouseup', e => {
+      if (isPanning) {
+        isPanning = false;
+        canvasContainer.classList.remove('active');
+      }
+      
+      if (isDraggingNode) {
+        isDraggingNode = false;
+        if (selectedNode) {
+          document.querySelector(\`.node[data-id="\${selectedNode.id}"]\`)?.classList.remove('dragging');
+        }
+      }
+      
+      if (connectingPort) {
+        tempEdge.style.display = 'none';
+        
+        // 检查是否释放在输入端口上
+        const targetPort = e.target.closest('.port-input');
+        if (targetPort) {
+          const targetNodeEl = targetPort.closest('.node');
+          const targetNodeId = targetNodeEl?.dataset.id;
+          
+          if (targetNodeId && targetNodeId !== connectingPort.nodeId) {
+            // 检查是否已存在连接
+            const exists = workflow.edges.some(e => 
+              e.source.nodeId === connectingPort.nodeId && e.target.nodeId === targetNodeId
+            );
+            
+            if (!exists) {
+              const edge = {
+                id: 'edge_' + Date.now(),
+                source: { nodeId: connectingPort.nodeId, portId: 'output' },
+                target: { nodeId: targetNodeId, portId: 'input' }
+              };
+              workflow.edges.push(edge);
+              renderEdges();
+            }
+          }
+        }
+        
+        connectingPort = null;
+      }
+    });
+    
+    // 滚轮缩放
+    canvasContainer.addEventListener('wheel', e => {
+      e.preventDefault();
+      const rect = canvasContainer.getBoundingClientRect();
+      const centerX = e.clientX - rect.left;
+      const centerY = e.clientY - rect.top;
+      
+      const delta = e.deltaY > 0 ? -SCALE_STEP : SCALE_STEP;
+      setScale(scale + delta, centerX, centerY);
+    });
+    
+    // ========== 键盘事件 ==========
+    
+    document.addEventListener('keydown', e => {
+      if (e.key === 'Delete' || e.key === 'Backspace') {
+        if (selectedNode && document.activeElement.tagName !== 'INPUT' && document.activeElement.tagName !== 'TEXTAREA') {
+          deleteNode(selectedNode.id);
+        }
+      }
+    });
+    
+    // ========== 工具栏 ==========
+    
     document.querySelectorAll('.toolbar-btn').forEach(btn => {
       btn.addEventListener('click', () => {
         const type = btn.dataset.type;
@@ -469,13 +750,42 @@ export class WorkflowEditorProvider implements vscode.CustomEditorProvider<Workf
       });
     });
     
-    // 添加节点
+    document.getElementById('btn-zoom-in').addEventListener('click', () => {
+      const rect = canvasContainer.getBoundingClientRect();
+      setScale(scale + SCALE_STEP * 2, rect.width / 2, rect.height / 2);
+    });
+    
+    document.getElementById('btn-zoom-out').addEventListener('click', () => {
+      const rect = canvasContainer.getBoundingClientRect();
+      setScale(scale - SCALE_STEP * 2, rect.width / 2, rect.height / 2);
+    });
+    
+    document.getElementById('btn-fit').addEventListener('click', fitToScreen);
+    
+    document.getElementById('btn-save').addEventListener('click', () => {
+      vscode.postMessage({ type: 'save', workflow });
+    });
+    
+    document.getElementById('btn-run').addEventListener('click', () => {
+      vscode.postMessage({ type: 'run', workflow });
+    });
+    
+    // ========== 节点操作 ==========
+    
     function addNode(type) {
       const id = 'node_' + Date.now();
+      const canvasCenter = screenToCanvas(
+        canvasContainer.getBoundingClientRect().width / 2,
+        canvasContainer.getBoundingClientRect().height / 2
+      );
+      
       const node = {
         id,
         type,
-        position: { x: 200 + Math.random() * 200, y: 150 + Math.random() * 100 },
+        position: { 
+          x: canvasCenter.x - 75 + Math.random() * 50, 
+          y: canvasCenter.y - 40 + Math.random() * 50 
+        },
         metadata: {
           name: getNodeName(type),
           description: ''
@@ -485,6 +795,14 @@ export class WorkflowEditorProvider implements vscode.CustomEditorProvider<Workf
       workflow.nodes.push(node);
       render();
       selectNode(node);
+    }
+    
+    function deleteNode(nodeId) {
+      workflow.nodes = workflow.nodes.filter(n => n.id !== nodeId);
+      workflow.edges = workflow.edges.filter(e => e.source.nodeId !== nodeId && e.target.nodeId !== nodeId);
+      selectedNode = null;
+      render();
+      showEmptyProperties();
     }
     
     function getNodeName(type) {
@@ -501,32 +819,6 @@ export class WorkflowEditorProvider implements vscode.CustomEditorProvider<Workf
       return names[type] || type;
     }
     
-    // 渲染
-    function render() {
-      const canvas = document.getElementById('canvas');
-      const nodesHtml = workflow.nodes.map(node => renderNode(node)).join('');
-      canvas.innerHTML = '<svg class="edge" id="edges-svg"></svg>' + nodesHtml;
-      
-      renderEdges();
-      attachNodeEvents();
-    }
-    
-    function renderNode(node) {
-      return \`
-        <div class="node node-type-\${node.type}" data-id="\${node.id}" style="left: \${node.position.x}px; top: \${node.position.y}px;">
-          <div class="node-header">
-            <span class="node-type-icon">\${getNodeIcon(node.type)}</span>
-            <span>\${node.metadata.name}</span>
-          </div>
-          <div class="node-body">
-            \${node.metadata.description || '双击编辑'}
-          </div>
-          \${node.type !== 'start' ? '<div class="port port-input" data-port="input"></div>' : ''}
-          \${node.type !== 'end' ? '<div class="port port-output" data-port="output"></div>' : ''}
-        </div>
-      \`;
-    }
-    
     function getNodeIcon(type) {
       const icons = {
         start: '▶',
@@ -541,8 +833,48 @@ export class WorkflowEditorProvider implements vscode.CustomEditorProvider<Workf
       return icons[type] || '?';
     }
     
+    function getNodeColor(type) {
+      const colors = {
+        start: '#4caf50',
+        end: '#f44336',
+        code: '#2196f3',
+        llm: '#9c27b0',
+        switch: '#ff9800',
+        parallel: '#00bcd4',
+        http: '#607d8b',
+        transform: '#795548'
+      };
+      return colors[type] || '#666';
+    }
+    
+    // ========== 渲染 ==========
+    
+    function render() {
+      renderNodes();
+      renderEdges();
+    }
+    
+    function renderNodes() {
+      nodesContainer.innerHTML = workflow.nodes.map(node => \`
+        <div class="node node-type-\${node.type} \${selectedNode?.id === node.id ? 'selected' : ''}" 
+             data-id="\${node.id}" 
+             style="left: \${node.position.x}px; top: \${node.position.y}px;">
+          <div class="node-header">
+            <span class="node-type-icon">\${getNodeIcon(node.type)}</span>
+            <span>\${node.metadata.name}</span>
+          </div>
+          <div class="node-body">
+            \${node.metadata.description || '双击编辑'}
+          </div>
+          \${node.type !== 'start' ? '<div class="port port-input" data-port="input"></div>' : ''}
+          \${node.type !== 'end' ? '<div class="port port-output" data-port="output"></div>' : ''}
+        </div>
+      \`).join('');
+      
+      attachNodeEvents();
+    }
+    
     function renderEdges() {
-      const svg = document.getElementById('edges-svg');
       const paths = workflow.edges.map(edge => {
         const sourceNode = workflow.nodes.find(n => n.id === edge.source.nodeId);
         const targetNode = workflow.nodes.find(n => n.id === edge.target.nodeId);
@@ -553,90 +885,67 @@ export class WorkflowEditorProvider implements vscode.CustomEditorProvider<Workf
         const x2 = targetNode.position.x;
         const y2 = targetNode.position.y + 40;
         
-        const cx1 = x1 + 50;
-        const cx2 = x2 - 50;
+        const cx1 = x1 + Math.abs(x2 - x1) * 0.4;
+        const cx2 = x2 - Math.abs(x2 - x1) * 0.4;
         
         return \`<path d="M \${x1} \${y1} C \${cx1} \${y1}, \${cx2} \${y2}, \${x2} \${y2}" stroke-linecap="round"/>\`;
       }).join('');
       
-      svg.innerHTML = paths;
+      edgesSvg.innerHTML = paths + '<path id="temp-edge" style="display: none;"/>';
     }
     
-    // 节点事件
     function attachNodeEvents() {
       document.querySelectorAll('.node').forEach(el => {
         const nodeId = el.dataset.id;
         
+        // 节点拖拽
         el.addEventListener('mousedown', e => {
           if (e.target.classList.contains('port')) return;
-          selectNode(workflow.nodes.find(n => n.id === nodeId));
-          isDragging = true;
-          dragStart = { x: e.clientX, y: e.clientY };
-          e.preventDefault();
+          if (e.button !== 0) return;
+          
+          const node = workflow.nodes.find(n => n.id === nodeId);
+          selectNode(node);
+          
+          isDraggingNode = true;
+          const canvasPos = screenToCanvas(e.clientX, e.clientY);
+          dragStart = canvasPos;
+          nodeStartPos = { ...node.position };
+          el.classList.add('dragging');
+          e.stopPropagation();
         });
         
-        el.addEventListener('dblclick', () => {
-          editNode(nodeId);
+        // 双击编辑
+        el.addEventListener('dblclick', e => {
+          if (e.target.classList.contains('port')) return;
+          vscode.postMessage({ type: 'editNode', nodeId });
         });
       });
       
       // 端口事件
-      document.querySelectorAll('.port').forEach(port => {
+      document.querySelectorAll('.port-output').forEach(port => {
         port.addEventListener('mousedown', e => {
           const nodeEl = port.closest('.node');
           const nodeId = nodeEl.dataset.id;
-          const portType = port.dataset.port;
-          connectingPort = { nodeId, portType, el: port };
+          connectingPort = { nodeId, portType: 'output' };
           e.stopPropagation();
+          e.preventDefault();
         });
       });
     }
     
-    // 画布拖拽
-    document.addEventListener('mousemove', e => {
-      if (isDragging && selectedNode) {
-        const dx = e.clientX - dragStart.x;
-        const dy = e.clientY - dragStart.y;
-        selectedNode.position.x += dx;
-        selectedNode.position.y += dy;
-        dragStart = { x: e.clientX, y: e.clientY };
-        render();
-        selectNode(selectedNode);
-      }
-    });
+    // ========== 选择与属性 ==========
     
-    document.addEventListener('mouseup', e => {
-      if (connectingPort && e.target.classList.contains('port')) {
-        const targetNodeEl = e.target.closest('.node');
-        const targetNodeId = targetNodeEl.dataset.id;
-        const targetPort = e.target.dataset.port;
-        
-        if (connectingPort.portType === 'output' && targetPort === 'input') {
-          const edge = {
-            id: 'edge_' + Date.now(),
-            source: { nodeId: connectingPort.nodeId, portId: 'output' },
-            target: { nodeId: targetNodeId, portId: 'input' }
-          };
-          workflow.edges.push(edge);
-          render();
-        }
-      }
-      
-      isDragging = false;
-      connectingPort = null;
-    });
-    
-    // 选择节点
     function selectNode(node) {
       document.querySelectorAll('.node').forEach(el => el.classList.remove('selected'));
       selectedNode = node;
       if (node) {
         document.querySelector(\`.node[data-id="\${node.id}"]\`)?.classList.add('selected');
         showProperties(node);
+      } else {
+        showEmptyProperties();
       }
     }
     
-    // 显示属性
     function showProperties(node) {
       const panel = document.getElementById('properties-content');
       panel.innerHTML = \`
@@ -659,72 +968,42 @@ export class WorkflowEditorProvider implements vscode.CustomEditorProvider<Workf
         <div class="property-group">
           <label>位置</label>
           <div style="display: flex; gap: 10px;">
-            <input type="number" id="prop-x" value="\${node.position.x}" style="width: 50%">
-            <input type="number" id="prop-y" value="\${node.position.y}" style="width: 50%">
+            <input type="number" id="prop-x" value="\${Math.round(node.position.x)}" style="width: 50%">
+            <input type="number" id="prop-y" value="\${Math.round(node.position.y)}" style="width: 50%">
           </div>
         </div>
-        <button id="btn-delete-node" style="width: 100%; margin-top: 20px; padding: 8px; background: #f44336; color: white; border: none; border-radius: 4px; cursor: pointer;">
-          删除节点
-        </button>
+        <button class="btn-danger" id="btn-delete-node">🗑️ 删除节点</button>
       \`;
       
-      // 属性修改事件
       document.getElementById('prop-name').addEventListener('change', e => {
         node.metadata.name = e.target.value;
-        render();
+        renderNodes();
       });
       
       document.getElementById('prop-desc').addEventListener('change', e => {
         node.metadata.description = e.target.value;
-        render();
+        renderNodes();
       });
       
       document.getElementById('prop-x').addEventListener('change', e => {
-        node.position.x = parseInt(e.target.value);
+        node.position.x = parseInt(e.target.value) || 0;
         render();
       });
       
       document.getElementById('prop-y').addEventListener('change', e => {
-        node.position.y = parseInt(e.target.value);
+        node.position.y = parseInt(e.target.value) || 0;
         render();
       });
       
       document.getElementById('btn-delete-node').addEventListener('click', () => {
-        workflow.nodes = workflow.nodes.filter(n => n.id !== node.id);
-        workflow.edges = workflow.edges.filter(e => e.source.nodeId !== node.id && e.target.nodeId !== node.id);
-        selectedNode = null;
-        render();
-        showEmptyProperties();
+        deleteNode(node.id);
       });
     }
     
     function showEmptyProperties() {
-      document.getElementById('properties-content').innerHTML = '<p style="color: var(--vscode-descriptionForeground); font-size: 12px;">选择一个节点查看其属性</p>';
+      document.getElementById('properties-content').innerHTML = 
+        '<p style="color: var(--vscode-descriptionForeground); font-size: 12px;">选择一个节点查看其属性</p>';
     }
-    
-    // 编辑节点
-    function editNode(nodeId) {
-      vscode.postMessage({
-        type: 'editNode',
-        nodeId
-      });
-    }
-    
-    // 保存
-    document.getElementById('btn-save').addEventListener('click', () => {
-      vscode.postMessage({
-        type: 'save',
-        workflow
-      });
-    });
-    
-    // 运行
-    document.getElementById('btn-run').addEventListener('click', () => {
-      vscode.postMessage({
-        type: 'run',
-        workflow
-      });
-    });
   </script>
 </body>
 </html>`;
