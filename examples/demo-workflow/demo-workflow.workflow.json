@@ -1,68 +1,51 @@
 {
   "id": "wf_demo_001",
   "name": "demo-workflow",
-  "description": "示例工作流 - 数据获取、LLM处理、条件分支",
+  "description": "示例工作流 - 简单的数据处理流程",
   "version": "1.0.0",
   "nodes": [
     {
       "id": "node_start",
       "type": "start",
       "position": { "x": 100, "y": 200 },
+      "configRef": "nodes/node_start.json",
       "metadata": {
         "name": "开始",
-        "description": "手动触发工作流"
+        "description": "手动触发"
       }
     },
     {
-      "id": "node_http_001",
-      "type": "http",
+      "id": "node_code_001",
+      "type": "code",
       "position": { "x": 300, "y": 200 },
-      "configRef": "nodes/node_http_001.json",
-      "inputs": { "url": "string" },
-      "outputs": { "data": "object", "status": "number" },
+      "configRef": "nodes/node_code_001.js",
+      "inputs": { "input": "any" },
+      "outputs": { "result": "object" },
       "metadata": {
-        "name": "获取数据",
-        "description": "从API获取数据"
+        "name": "数据处理",
+        "description": "处理输入数据"
       }
     },
     {
-      "id": "node_llm_001",
-      "type": "llm",
-      "position": { "x": 550, "y": 200 },
-      "configRef": "nodes/node_llm_001.json",
-      "inputs": { "prompt": "string", "data": "object" },
-      "outputs": { "response": "string", "analysis": "object" },
+      "id": "node_transform_001",
+      "type": "transform",
+      "position": { "x": 500, "y": 200 },
+      "configRef": "nodes/node_transform_001.json",
+      "inputs": { "data": "object" },
+      "outputs": { "output": "object" },
       "metadata": {
-        "name": "LLM 分析",
-        "description": "使用LLM分析数据"
-      }
-    },
-    {
-      "id": "node_switch_001",
-      "type": "switch",
-      "position": { "x": 800, "y": 200 },
-      "configRef": "nodes/node_switch_001.json",
-      "inputs": { "analysis": "object" },
-      "outputs": { "branch": "string" },
-      "data": {
-        "branches": [
-          { "id": "high_priority", "name": "高优先级" },
-          { "id": "low_priority", "name": "低优先级" }
-        ],
-        "defaultBranch": "default"
-      },
-      "metadata": {
-        "name": "条件分支",
-        "description": "根据分析结果分流"
+        "name": "数据转换",
+        "description": "转换数据格式"
       }
     },
     {
       "id": "node_end",
       "type": "end",
-      "position": { "x": 1050, "y": 200 },
+      "position": { "x": 700, "y": 200 },
+      "configRef": "nodes/node_end.json",
       "metadata": {
         "name": "结束",
-        "description": "工作流结束"
+        "description": "输出结果"
       }
     }
   ],
@@ -70,28 +53,23 @@
     {
       "id": "edge_001",
       "source": { "nodeId": "node_start", "portId": "output" },
-      "target": { "nodeId": "node_http_001", "portId": "input" }
+      "target": { "nodeId": "node_code_001", "portId": "input" }
     },
     {
       "id": "edge_002",
-      "source": { "nodeId": "node_http_001", "portId": "output" },
-      "target": { "nodeId": "node_llm_001", "portId": "input" }
+      "source": { "nodeId": "node_code_001", "portId": "output" },
+      "target": { "nodeId": "node_transform_001", "portId": "input" }
     },
     {
       "id": "edge_003",
-      "source": { "nodeId": "node_llm_001", "portId": "output" },
-      "target": { "nodeId": "node_switch_001", "portId": "input" }
-    },
-    {
-      "id": "edge_004",
-      "source": { "nodeId": "node_switch_001", "portId": "output" },
+      "source": { "nodeId": "node_transform_001", "portId": "output" },
       "target": { "nodeId": "node_end", "portId": "input" }
     }
   ],
   "metadata": {
     "author": "demo",
-    "createdAt": "2026-03-11T00:00:00.000Z",
-    "updatedAt": "2026-03-11T00:00:00.000Z",
+    "createdAt": "2026-03-12T00:00:00.000Z",
+    "updatedAt": "2026-03-12T00:00:00.000Z",
     "tags": ["demo", "example"]
   }
 }

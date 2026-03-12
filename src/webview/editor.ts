@@ -158,6 +158,11 @@ export class WorkflowEditorProvider implements vscode.CustomEditorProvider<Workf
           // 同步 nodeConfigs 并更新配置文件
           await this.syncNodeConfigFiles(document, message.nodeConfigs);
           break;
+          
+        case 'run':
+          // 运行工作流
+          await this.runWorkflow(document, webviewPanel.webview);
+          break;
       }
     });
   }
@@ -285,6 +290,65 @@ export class WorkflowEditorProvider implements vscode.CustomEditorProvider<Workf
           await fs.promises.writeFile(filePath, '', 'utf-8');
         }
       }
+    }
+  }
+  
+  /**
+   * 运行工作流
+   */
+  private async runWorkflow(document: WorkflowDocument, webview: vscode.Webview): Promise<void> {
+    const { WorkflowEngine } = await import('../engine');
+    
+    vscode.window.showInformationMessage('开始运行工作流...');
+    
+    const engine = new WorkflowEngine();
+    
+    // 监听执行事件
+    engine.on((event) => {
+      if (event.type === 'node:start') {
+        console.log(`[Engine] Node ${event.nodeId} starting`);
+      } else if (event.type === 'node:end') {
+        console.log(`[Engine] Node ${event.result.nodeId} finished:`, event.result.status);
+      } else if (event.type === 'workflow:end') {
+        console.log('[Engine] Workflow finished:', event.result.status);
+      }
+    });
+    
+    try {
+      const result = await engine.execute(document.workflow, document.nodeConfigs);
+      
+      if (result.status === 'success') {
+        vscode.window.showInformationMessage('工作流运行成功！');
+      } else {
+        vscode.window.showErrorMessage(`工作流运行失败: ${result.error || '未知错误'}`);
+      }
+      
+      // 输出详细结果
+      const outputChannel = vscode.window.createOutputChannel('Workflow Execution');
+      outputChannel.clear();
+      outputChannel.appendLine('=== Workflow Execution Result ===');
+      outputChannel.appendLine(`Status: ${result.status}`);
+      outputChannel.appendLine(`Duration: ${result.duration}ms`);
+      outputChannel.appendLine('');
+      outputChannel.appendLine('=== Node Results ===');
+      for (const nodeResult of result.nodeResults) {
+        outputChannel.appendLine(`\n[${nodeResult.nodeId}] ${nodeResult.status}`);
+        outputChannel.appendLine(`  Duration: ${nodeResult.duration}ms`);
+        if (nodeResult.output) {
+          outputChannel.appendLine(`  Output: ${JSON.stringify(nodeResult.output, null, 2)}`);
+        }
+        if (nodeResult.error) {
+          outputChannel.appendLine(`  Error: ${nodeResult.error}`);
+        }
+      }
+      outputChannel.show();
+      
+      // 通知 webview 运行完成
+      webview.postMessage({ type: 'runComplete', result });
+      
+    } catch (error) {
+      vscode.window.showErrorMessage(`运行错误: ${error}`);
+      webview.postMessage({ type: 'runError', error: String(error) });
     }
   }
 

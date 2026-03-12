@@ -1,0 +1,7 @@
+{
+  "mapping": {
+    "timestamp": "timestamp",
+    "total": "total",
+    "itemCount": "items.length"
+  }
+}
