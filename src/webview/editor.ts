@@ -206,19 +206,16 @@ export class WorkflowEditorProvider implements vscode.CustomEditorProvider<Workf
   private async handleRemoveNode(document: WorkflowDocument, nodeId: string, webview: vscode.Webview): Promise<void> {
     const fs = await import('fs');
     
-    // 找到要删除的节点
-    const node = document.workflow.nodes.find(n => n.id === nodeId);
-    
-    // 删除配置文件
-    if (node) {
-      const config = document.nodeConfigs.get(nodeId);
-      if (config) {
-        const ext = getConfigExtension(node.type as NodeType, config);
-        const fileName = `${nodeId}_${node.type}${ext}`;
-        const filePath = path.join(document.workflowDir, 'nodes', fileName);
-        
-        if (fs.existsSync(filePath)) {
+    // 删除配置文件 - 直接查找 nodes 目录下匹配 {nodeId}_* 的文件
+    const nodesDir = path.join(document.workflowDir, 'nodes');
+    if (fs.existsSync(nodesDir)) {
+      const files = await fs.promises.readdir(nodesDir);
+      for (const file of files) {
+        // 匹配 {nodeId}_{type}.{ext} 格式
+        if (file.startsWith(`${nodeId}_`)) {
+          const filePath = path.join(nodesDir, file);
           await fs.promises.unlink(filePath);
+          console.log('[Editor] Deleted config file:', file);
         }
       }
     }
