@@ -14,6 +14,10 @@ import {
   WorkflowExecutionStatus,
   NodeExecutionStatus
 } from './types';
+import { spawn } from 'child_process';
+import * as path from 'path';
+import * as fs from 'fs';
+import * as os from 'os';
 
 /** 节点执行器接口 */
 export interface NodeExecutor<TConfig extends NodeConfig = NodeConfig> {
@@ -77,17 +81,12 @@ export class WorkflowEngine {
     this.nodeExecutors.set('code', {
       type: 'code',
       execute: async (config: any, input: any, context: ExecutionContext) => {
-        // 安全考虑：实际执行需要沙箱环境
-        // 这里提供一个简化的实现框架
         const { language, code, timeout = 30000 } = config;
         
-        if (language === 'javascript' || language === 'typescript') {
-          // 使用 vm 模块或 worker 在沙箱中执行
-          // 实际实现需要更复杂的安全措施
-          return { output: 'Code execution placeholder', input };
-        } else if (language === 'python') {
-          // 需要 Python 环境
-          return { output: 'Python execution placeholder', input };
+        if (language === 'python') {
+          return await executePython(code, input, timeout);
+        } else if (language === 'javascript' || language === 'typescript') {
+          return await executeJavaScript(code, input, timeout);
         }
         
         throw new Error(`Unsupported language: ${language}`);
@@ -357,6 +356,217 @@ function evaluateCondition(condition: string, data: any): boolean {
     return eval(expr);
   } catch {
     return false;
+  }
+}
+
+/**
+ * 执行 Python 代码
+ */
+async function executePython(code: string, input: any, timeout: number): Promise<any> {
+  // 创建临时目录
+  const tmpDir = path.join(os.tmpdir(), `workflow_exec_${Date.now()}`);
+  await fs.promises.mkdir(tmpDir, { recursive: true });
+  
+  // 包装代码，注入 input 并捕获输出
+  const wrappedCode = `
+import json
+import sys
+
+# 输入数据
+_input = json.loads(sys.argv[1]) if len(sys.argv) > 1 else {}
+
+# 用户代码
+${code}
+
+# 执行 main 函数并输出结果
+if 'main' in dir():
+    try:
+        _result = main(_input)
+        print("__RESULT_START__")
+        print(json.dumps(_result, ensure_ascii=False, default=str))
+        print("__RESULT_END__")
+    except Exception as e:
+        print("__ERROR_START__")
+        print(json.dumps({"error": str(e)}))
+        print("__ERROR_END__")
+`;
+
+  const scriptPath = path.join(tmpDir, 'script.py');
+  await fs.promises.writeFile(scriptPath, wrappedCode, 'utf-8');
+
+  return new Promise((resolve, reject) => {
+    const pythonProcess = spawn('python3', [scriptPath, JSON.stringify(input)], {
+      cwd: tmpDir,
+      env: { ...process.env, PYTHONIOENCODING: 'utf-8' }
+    });
+
+    let stdout = '';
+    let stderr = '';
+
+    pythonProcess.stdout.on('data', (data) => {
+      stdout += data.toString();
+    });
+
+    pythonProcess.stderr.on('data', (data) => {
+      stderr += data.toString();
+    });
+
+    // 超时处理
+    const timeoutId = setTimeout(() => {
+      pythonProcess.kill();
+      cleanup(tmpDir);
+      reject(new Error(`Execution timeout after ${timeout}ms`));
+    }, timeout);
+
+    pythonProcess.on('close', (code) => {
+      clearTimeout(timeoutId);
+      cleanup(tmpDir);
+
+      if (code !== 0) {
+        reject(new Error(`Python execution failed (exit code ${code}): ${stderr}`));
+        return;
+      }
+
+      // 解析输出
+      try {
+        const resultMatch = stdout.match(/__RESULT_START__\s*([\s\S]*?)\s*__RESULT_END__/);
+        const errorMatch = stdout.match(/__ERROR_START__\s*([\s\S]*?)\s*__ERROR_END__/);
+
+        if (errorMatch) {
+          const errorData = JSON.parse(errorMatch[1]);
+          reject(new Error(errorData.error || 'Unknown error in Python code'));
+          return;
+        }
+
+        if (resultMatch) {
+          const result = JSON.parse(resultMatch[1]);
+          resolve(result);
+          return;
+        }
+
+        // 如果没有找到标记，返回原始输出
+        resolve({ output: stdout.trim() });
+      } catch (err) {
+        reject(new Error(`Failed to parse Python output: ${err}\nOutput: ${stdout}`));
+      }
+    });
+
+    pythonProcess.on('error', (err) => {
+      clearTimeout(timeoutId);
+      cleanup(tmpDir);
+      reject(new Error(`Failed to start Python process: ${err.message}`));
+    });
+  });
+}
+
+/**
+ * 执行 JavaScript 代码
+ */
+async function executeJavaScript(code: string, input: any, timeout: number): Promise<any> {
+  // 创建临时目录
+  const tmpDir = path.join(os.tmpdir(), `workflow_exec_${Date.now()}`);
+  await fs.promises.mkdir(tmpDir, { recursive: true });
+
+  // 包装代码
+  const wrappedCode = `
+const input = ${JSON.stringify(input)};
+
+${code}
+
+// 执行并输出结果
+(async () => {
+  try {
+    let result;
+    if (typeof main === 'function') {
+      result = await main(input);
+    } else if (typeof module !== 'undefined' && module.exports) {
+      result = await module.exports(input);
+    } else {
+      result = { output: 'No main function found' };
+    }
+    console.log('__RESULT_START__');
+    console.log(JSON.stringify(result));
+    console.log('__RESULT_END__');
+  } catch (e) {
+    console.log('__ERROR_START__');
+    console.log(JSON.stringify({ error: e.message }));
+    console.log('__ERROR_END__');
+  }
+})();
+`;
+
+  const scriptPath = path.join(tmpDir, 'script.js');
+  await fs.promises.writeFile(scriptPath, wrappedCode, 'utf-8');
+
+  return new Promise((resolve, reject) => {
+    const nodeProcess = spawn('node', [scriptPath], {
+      cwd: tmpDir
+    });
+
+    let stdout = '';
+    let stderr = '';
+
+    nodeProcess.stdout.on('data', (data) => {
+      stdout += data.toString();
+    });
+
+    nodeProcess.stderr.on('data', (data) => {
+      stderr += data.toString();
+    });
+
+    const timeoutId = setTimeout(() => {
+      nodeProcess.kill();
+      cleanup(tmpDir);
+      reject(new Error(`Execution timeout after ${timeout}ms`));
+    }, timeout);
+
+    nodeProcess.on('close', (code) => {
+      clearTimeout(timeoutId);
+      cleanup(tmpDir);
+
+      if (code !== 0) {
+        reject(new Error(`JavaScript execution failed (exit code ${code}): ${stderr}`));
+        return;
+      }
+
+      try {
+        const resultMatch = stdout.match(/__RESULT_START__\s*([\s\S]*?)\s*__RESULT_END__/);
+        const errorMatch = stdout.match(/__ERROR_START__\s*([\s\S]*?)\s*__ERROR_END__/);
+
+        if (errorMatch) {
+          const errorData = JSON.parse(errorMatch[1]);
+          reject(new Error(errorData.error || 'Unknown error in JavaScript code'));
+          return;
+        }
+
+        if (resultMatch) {
+          const result = JSON.parse(resultMatch[1]);
+          resolve(result);
+          return;
+        }
+
+        resolve({ output: stdout.trim() });
+      } catch (err) {
+        reject(new Error(`Failed to parse JavaScript output: ${err}\nOutput: ${stdout}`));
+      }
+    });
+
+    nodeProcess.on('error', (err) => {
+      clearTimeout(timeoutId);
+      cleanup(tmpDir);
+      reject(new Error(`Failed to start Node process: ${err.message}`));
+    });
+  });
+}
+
+/**
+ * 清理临时目录
+ */
+async function cleanup(tmpDir: string): Promise<void> {
+  try {
+    await fs.promises.rm(tmpDir, { recursive: true, force: true });
+  } catch {
+    // 忽略清理错误
   }
 }
 
