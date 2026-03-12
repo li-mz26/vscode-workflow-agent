@@ -163,12 +163,18 @@ export class WorkflowEditorProvider implements vscode.CustomEditorProvider<Workf
           break;
 
         case 'save':
+          console.log('[Editor] Received save message');
+          console.log('[Editor] Workflow nodes:', JSON.stringify(message.workflow?.nodes, null, 2));
+          console.log('[Editor] NodeConfigs in document:', Object.fromEntries(document.nodeConfigs));
           document.workflow = message.workflow;
+          console.log('[Editor] Document workflow nodes after merge:', document.workflow.nodes.map(n => ({ id: n.id, type: n.type, configRef: n.configRef })));
+          console.log('[Editor] Document workflowDir:', document.workflowDir);
           await this.saveDocument(document);
           webviewPanel.webview.postMessage({ type: 'saved' });
           break;
 
         case 'addNode':
+          console.log('[Editor] Received addNode message:', message.node);
           this.handleAddNode(document, message.node, webviewPanel.webview);
           break;
 
@@ -204,6 +210,11 @@ export class WorkflowEditorProvider implements vscode.CustomEditorProvider<Workf
   }
 
   private async saveDocument(document: WorkflowDocument): Promise<void> {
+    console.log('[Editor] saveDocument called');
+    console.log('[Editor] document.workflowDir:', document.workflowDir);
+    console.log('[Editor] document.workflow:', JSON.stringify(document.workflow, null, 2));
+    console.log('[Editor] document.nodeConfigs:', Object.fromEntries(document.nodeConfigs));
+    
     // 使用 WorkflowLoader 保存工作流和配置文件
     const result = await WorkflowLoader.saveToDirectory(
       document.workflowDir,
@@ -211,23 +222,35 @@ export class WorkflowEditorProvider implements vscode.CustomEditorProvider<Workf
       document.nodeConfigs
     );
     
+    console.log('[Editor] WorkflowLoader.saveToDirectory result:', result);
+    
     if (!result.success) {
       vscode.window.showErrorMessage(`保存失败: ${result.error}`);
+    } else {
+      vscode.window.showInformationMessage('工作流保存成功！');
     }
   }
 
   private handleAddNode(document: WorkflowDocument, node: WorkflowNode, webview: vscode.Webview): void {
+    console.log('[Editor] handleAddNode called with node:', node);
+    
     // 生成默认配置
     const config = createDefaultNodeConfig(node.type as NodeType);
+    console.log('[Editor] Created config for node:', config);
+    
     document.nodeConfigs.set(node.id, config);
+    console.log('[Editor] nodeConfigs after add:', Object.fromEntries(document.nodeConfigs));
     
     // 设置 configRef
     const ext = getConfigExtension(node.type as NodeType, config);
+    console.log('[Editor] Config extension:', ext);
+    
     if (ext === '.json') {
       node.configRef = `nodes/${node.id}_${node.type}.json`;
     } else {
       node.configRef = `nodes/${node.id}_${node.type}${ext}`;
     }
+    console.log('[Editor] Node with configRef:', node);
     
     // 注意：不在这里 push 节点到 document.workflow.nodes
     // 因为保存时会用 webview 发来的 workflow 覆盖
@@ -235,6 +258,7 @@ export class WorkflowEditorProvider implements vscode.CustomEditorProvider<Workf
     
     // 发送带有 configRef 的节点给 webview
     webview.postMessage({ type: 'nodeAdded', node, config });
+    console.log('[Editor] Sent nodeAdded message to webview');
   }
 
   private handleRemoveNode(document: WorkflowDocument, nodeId: string, webview: vscode.Webview): void {
@@ -711,23 +735,29 @@ export class WorkflowEditorProvider implements vscode.CustomEditorProvider<Workf
     // 初始化
     window.addEventListener('message', event => {
       const message = event.data;
+      console.log('[Webview] Received message:', message.type, message);
       switch (message.type) {
         case 'init':
+          console.log('[Webview] Init workflow:', message.workflow);
+          console.log('[Webview] Init nodeConfigs:', message.nodeConfigs);
           workflow = message.workflow;
           nodeConfigs = message.nodeConfigs || {};
           render();
           fitToScreen();
           break;
         case 'saved':
-          console.log('Workflow saved');
+          console.log('[Webview] Workflow saved confirmation');
           break;
         case 'nodeAdded':
+          console.log('[Webview] Node added response:', message.node);
+          console.log('[Webview] Node configRef:', message.node?.configRef);
           // 后端返回了带有 configRef 的节点，更新本地状态
           if (message.node) {
             workflow.nodes.push(message.node);
             if (message.config) {
               nodeConfigs[message.node.id] = message.config;
             }
+            console.log('[Webview] workflow.nodes after push:', workflow.nodes.length);
             render();
             selectNode(message.node);
           }
@@ -921,6 +951,12 @@ export class WorkflowEditorProvider implements vscode.CustomEditorProvider<Workf
     document.getElementById('btn-fit').addEventListener('click', fitToScreen);
     
     document.getElementById('btn-save').addEventListener('click', () => {
+      console.log('[Webview] Save button clicked');
+      console.log('[Webview] workflow.nodes:', workflow.nodes);
+      console.log('[Webview] nodeConfigs:', nodeConfigs);
+      workflow.nodes.forEach(n => {
+        console.log('[Webview] Node:', n.id, 'type:', n.type, 'configRef:', n.configRef);
+      });
       vscode.postMessage({ type: 'save', workflow });
     });
     
@@ -951,6 +987,7 @@ export class WorkflowEditorProvider implements vscode.CustomEditorProvider<Workf
         data: {}
       };
       
+      console.log('[Webview] addNode: sending addNode message', node);
       // 只发送消息给 vscode，让后端处理添加和配置，等待 nodeAdded 响应
       vscode.postMessage({ type: 'addNode', node });
     }

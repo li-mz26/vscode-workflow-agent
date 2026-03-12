@@ -83,28 +83,40 @@ export class WorkflowLoader {
    * 保存工作流到目录
    */
   static async saveToDirectory(dirPath: string, workflow: Workflow, nodeConfigs: Map<string, NodeConfig>): Promise<WorkflowSaveResult> {
+    console.log('[WorkflowLoader] saveToDirectory called');
+    console.log('[WorkflowLoader] dirPath:', dirPath);
+    console.log('[WorkflowLoader] workflow:', JSON.stringify(workflow, null, 2));
+    console.log('[WorkflowLoader] nodeConfigs:', Object.fromEntries(nodeConfigs));
+    
     try {
       // 确保目录存在
       if (!fs.existsSync(dirPath)) {
+        console.log('[WorkflowLoader] Creating directory:', dirPath);
         await fs.promises.mkdir(dirPath, { recursive: true });
       }
 
       // 创建 nodes 目录
       const nodesDir = path.join(dirPath, 'nodes');
+      console.log('[WorkflowLoader] nodesDir:', nodesDir);
       if (!fs.existsSync(nodesDir)) {
+        console.log('[WorkflowLoader] Creating nodes directory:', nodesDir);
         await fs.promises.mkdir(nodesDir, { recursive: true });
       }
 
       // 保存工作流定义文件
       const workflowFile = path.join(dirPath, `${workflow.name}.workflow.json`);
+      console.log('[WorkflowLoader] workflowFile:', workflowFile);
       
       // 更新节点的 configRef
       const updatedNodes = workflow.nodes.map(node => {
+        console.log('[WorkflowLoader] Processing node:', node.id, 'hasConfig:', nodeConfigs.has(node.id));
         if (nodeConfigs.has(node.id)) {
           const config = nodeConfigs.get(node.id)!;
           const configRef = this.getConfigFileName(node, config);
+          console.log('[WorkflowLoader] Node', node.id, 'configRef:', configRef);
           return { ...node, configRef: `nodes/${configRef}` };
         }
+        console.log('[WorkflowLoader] Node', node.id, 'has no config, keeping existing configRef:', node.configRef);
         return node;
       });
 
@@ -118,25 +130,33 @@ export class WorkflowLoader {
       };
 
       await fs.promises.writeFile(workflowFile, JSON.stringify(workflowToSave, null, 2), 'utf-8');
+      console.log('[WorkflowLoader] Workflow file saved');
 
       // 保存节点配置文件
+      console.log('[WorkflowLoader] Saving node configs, count:', nodeConfigs.size);
       for (const [nodeId, config] of nodeConfigs) {
         const node = workflow.nodes.find(n => n.id === nodeId);
+        console.log('[WorkflowLoader] Saving config for node:', nodeId, 'found:', !!node);
         if (node) {
           const configFileName = this.getConfigFileName(node, config);
           const configPath = path.join(nodesDir, configFileName);
+          console.log('[WorkflowLoader] Config file path:', configPath);
           
           // 代码类型直接保存代码
           if ('code' in config && 'language' in config) {
+            console.log('[WorkflowLoader] Writing code file:', configPath);
             await fs.promises.writeFile(configPath, config.code, 'utf-8');
           } else {
+            console.log('[WorkflowLoader] Writing JSON file:', configPath);
             await fs.promises.writeFile(configPath, JSON.stringify(config, null, 2), 'utf-8');
           }
         }
       }
-
+      
+      console.log('[WorkflowLoader] Save complete');
       return { success: true };
     } catch (err) {
+      console.error('[WorkflowLoader] Error:', err);
       return { success: false, error: String(err) };
     }
   }
