@@ -229,7 +229,11 @@ export class WorkflowEditorProvider implements vscode.CustomEditorProvider<Workf
       node.configRef = `nodes/${node.id}_${node.type}${ext}`;
     }
     
-    document.workflow.nodes.push(node);
+    // 注意：不在这里 push 节点到 document.workflow.nodes
+    // 因为保存时会用 webview 发来的 workflow 覆盖
+    // webview 会在收到 nodeAdded 响应后处理节点的添加
+    
+    // 发送带有 configRef 的节点给 webview
     webview.postMessage({ type: 'nodeAdded', node, config });
   }
 
@@ -718,10 +722,18 @@ export class WorkflowEditorProvider implements vscode.CustomEditorProvider<Workf
           console.log('Workflow saved');
           break;
         case 'nodeAdded':
-          // 更新本地配置
-          if (message.config) {
-            nodeConfigs[message.node.id] = message.config;
+          // 后端返回了带有 configRef 的节点，更新本地状态
+          if (message.node) {
+            workflow.nodes.push(message.node);
+            if (message.config) {
+              nodeConfigs[message.node.id] = message.config;
+            }
+            render();
+            selectNode(message.node);
           }
+          break;
+        case 'nodeRemoved':
+          // 节点删除确认
           break;
       }
     });
@@ -939,10 +951,8 @@ export class WorkflowEditorProvider implements vscode.CustomEditorProvider<Workf
         data: {}
       };
       
+      // 只发送消息给 vscode，让后端处理添加和配置，等待 nodeAdded 响应
       vscode.postMessage({ type: 'addNode', node });
-      workflow.nodes.push(node);
-      render();
-      selectNode(node);
     }
     
     function deleteNode(nodeId) {
