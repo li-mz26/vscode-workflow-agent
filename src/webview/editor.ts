@@ -137,6 +137,7 @@ export class WorkflowEditorProvider implements vscode.CustomEditorProvider<Workf
 
         case 'save':
           document.workflow = message.workflow;
+          document.nodeConfigs = new Map(Object.entries(message.nodeConfigs || {}));
           await this.saveDocument(document);
           webviewPanel.webview.postMessage({ type: 'saved' });
           break;
@@ -151,6 +152,11 @@ export class WorkflowEditorProvider implements vscode.CustomEditorProvider<Workf
 
         case 'updateNodeConfig':
           this.handleUpdateNodeConfig(document, message.nodeId, message.config);
+          break;
+          
+        case 'syncNodeConfigs':
+          // 同步 nodeConfigs 并更新配置文件
+          await this.syncNodeConfigFiles(document, message.nodeConfigs);
           break;
       }
     });
@@ -208,6 +214,60 @@ export class WorkflowEditorProvider implements vscode.CustomEditorProvider<Workf
 
   private handleUpdateNodeConfig(document: WorkflowDocument, nodeId: string, config: NodeConfig): void {
     document.nodeConfigs.set(nodeId, config);
+  }
+  
+  /**
+   * 同步节点配置文件（撤销/重做时调用）
+   */
+  private async syncNodeConfigFiles(document: WorkflowDocument, nodeConfigsObj: Record<string, NodeConfig>): Promise<void> {
+    const fs = await import('fs');
+    
+    // 更新内存中的 nodeConfigs
+    document.nodeConfigs = new Map(Object.entries(nodeConfigsObj));
+    
+    const nodesDir = path.join(document.workflowDir, 'nodes');
+    
+    // 确保 nodes 目录存在
+    if (!fs.existsSync(nodesDir)) {
+      await fs.promises.mkdir(nodesDir, { recursive: true });
+    }
+    
+    // 获取当前应该存在的配置文件列表
+    const expectedFiles = new Set<string>();
+    for (const [nodeId, config] of document.nodeConfigs) {
+      const node = document.workflow.nodes.find(n => n.id === nodeId);
+      if (node) {
+        const ext = getConfigExtension(node.type as NodeType, config);
+        const fileName = `${nodeId}_${node.type}${ext}`;
+        expectedFiles.add(fileName);
+      }
+    }
+    
+    // 删除不需要的配置文件
+    if (fs.existsSync(nodesDir)) {
+      const existingFiles = await fs.promises.readdir(nodesDir);
+      for (const file of existingFiles) {
+        if (!expectedFiles.has(file) && (file.endsWith('.json') || file.endsWith('.js') || file.endsWith('.ts') || file.endsWith('.py'))) {
+          const filePath = path.join(nodesDir, file);
+          await fs.promises.unlink(filePath);
+        }
+      }
+    }
+    
+    // 创建缺失的配置文件
+    for (const [nodeId, config] of document.nodeConfigs) {
+      const node = document.workflow.nodes.find(n => n.id === nodeId);
+      if (node) {
+        const ext = getConfigExtension(node.type as NodeType, config);
+        const fileName = `${nodeId}_${node.type}${ext}`;
+        const filePath = path.join(nodesDir, fileName);
+        
+        // 如果文件不存在，创建空文件
+        if (!fs.existsSync(filePath)) {
+          await fs.promises.writeFile(filePath, '', 'utf-8');
+        }
+      }
+    }
   }
 
   saveCustomDocument(document: WorkflowDocument, _cancellation: vscode.CancellationToken): Thenable<void> {
@@ -723,11 +783,15 @@ export class WorkflowEditorProvider implements vscode.CustomEditorProvider<Workf
         this.isRecording = true;
       }
       
-      push(state, description = '') {
+      // 保存状态：包含 workflow 和 nodeConfigs
+      push(workflow, nodeConfigs, description = '') {
         if (!this.isRecording) return;
         
         // 深拷贝状态
-        const snapshot = JSON.parse(JSON.stringify(state));
+        const snapshot = {
+          workflow: JSON.parse(JSON.stringify(workflow)),
+          nodeConfigs: JSON.parse(JSON.stringify(nodeConfigs))
+        };
         this.undoStack.push({ state: snapshot, description, timestamp: Date.now() });
         
         // 限制大小
@@ -750,7 +814,10 @@ export class WorkflowEditorProvider implements vscode.CustomEditorProvider<Workf
         // 返回上一个状态
         const previous = this.undoStack[this.undoStack.length - 1];
         this.updateButtons();
-        return JSON.parse(JSON.stringify(previous.state));
+        return {
+          workflow: JSON.parse(JSON.stringify(previous.state.workflow)),
+          nodeConfigs: JSON.parse(JSON.stringify(previous.state.nodeConfigs))
+        };
       }
       
       redo() {
@@ -759,7 +826,10 @@ export class WorkflowEditorProvider implements vscode.CustomEditorProvider<Workf
         const next = this.redoStack.pop();
         this.undoStack.push(next);
         this.updateButtons();
-        return JSON.parse(JSON.stringify(next.state));
+        return {
+          workflow: JSON.parse(JSON.stringify(next.state.workflow)),
+          nodeConfigs: JSON.parse(JSON.stringify(next.state.nodeConfigs))
+        };
       }
       
       canUndo() { return this.undoStack.length > 1; }
@@ -775,7 +845,11 @@ export class WorkflowEditorProvider implements vscode.CustomEditorProvider<Workf
       
       getCurrentState() {
         if (this.undoStack.length === 0) return null;
-        return JSON.parse(JSON.stringify(this.undoStack[this.undoStack.length - 1].state));
+        const latest = this.undoStack[this.undoStack.length - 1];
+        return {
+          workflow: JSON.parse(JSON.stringify(latest.state.workflow)),
+          nodeConfigs: JSON.parse(JSON.stringify(latest.state.nodeConfigs))
+        };
       }
     }
     
@@ -823,7 +897,7 @@ export class WorkflowEditorProvider implements vscode.CustomEditorProvider<Workf
           
           // 初始化历史记录
           history.pause();
-          history.push(workflow, '初始状态');
+          history.push(workflow, nodeConfigs, '初始状态');
           history.resume();
           
           render();
@@ -854,15 +928,22 @@ export class WorkflowEditorProvider implements vscode.CustomEditorProvider<Workf
     
     // ========== 历史记录操作 ==========
     function pushHistory(description) {
-      history.push(workflow, description);
+      history.push(workflow, nodeConfigs, description);
       updateJsonEditor();
     }
     
     function applyHistoryState(state) {
-      workflow = state;
+      workflow = state.workflow;
+      nodeConfigs = state.nodeConfigs;
       render();
       updateJsonEditor();
       selectNode(null);
+      
+      // 同步配置文件到后端
+      vscode.postMessage({ 
+        type: 'syncNodeConfigs', 
+        nodeConfigs: nodeConfigs 
+      });
     }
     
     document.getElementById('btn-undo').addEventListener('click', () => {
