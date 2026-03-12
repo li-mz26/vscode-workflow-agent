@@ -3,8 +3,116 @@
  */
 
 import * as vscode from 'vscode';
-import { Workflow, WorkflowNode, WorkflowEdge, NodeType } from '../engine/types';
+import * as path from 'path';
+import { Workflow, WorkflowNode, WorkflowEdge, NodeType, NodeConfig } from '../engine/types';
 import { WorkflowLoader } from '../engine/loader';
+
+/**
+ * 生成节点默认配置
+ */
+function createDefaultNodeConfig(type: NodeType): NodeConfig {
+  switch (type) {
+    case 'start':
+      return {
+        triggerType: 'manual'
+      };
+    case 'end':
+      return {
+        outputMode: 'last'
+      };
+    case 'code':
+      return {
+        language: 'javascript',
+        code: `// 在此编写代码
+// input: 输入数据
+// 返回值将作为输出
+
+module.exports = async function(input) {
+  console.log('Input:', input);
+  return { result: input };
+};`,
+        timeout: 30000
+      };
+    case 'llm':
+      return {
+        model: {
+          provider: 'openai',
+          model: 'gpt-4'
+        },
+        systemPrompt: '你是一个有帮助的助手。',
+        userPrompt: '{{input}}',
+        temperature: 0.7,
+        maxTokens: 2000
+      };
+    case 'switch':
+      return {
+        branches: [
+          { id: 'branch_1', name: '分支 1', condition: 'data.value > 0' }
+        ],
+        defaultBranch: 'default',
+        evaluationMode: 'first-match'
+      };
+    case 'parallel':
+      return {
+        branches: [
+          { id: 'parallel_1', name: '并行分支 1' }
+        ],
+        waitMode: 'all',
+        failMode: 'stop'
+      };
+    case 'http':
+      return {
+        url: 'https://api.example.com/endpoint',
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        timeout: 30000
+      };
+    case 'transform':
+      return {
+        mapping: {
+          'output': 'input'
+        }
+      };
+    case 'delay':
+      return {
+        duration: 1,
+        unit: 'seconds'
+      };
+    default:
+      return {} as NodeConfig;
+  }
+}
+
+/**
+ * 获取配置文件扩展名
+ */
+function getConfigExtension(type: NodeType, config: NodeConfig): string {
+  if ('language' in config && 'code' in config) {
+    return config.language === 'python' ? '.py' : 
+           config.language === 'typescript' ? '.ts' : '.js';
+  }
+  return '.json';
+}
+
+class WorkflowDocument implements vscode.CustomDocument {
+  public workflow: Workflow;
+  public nodeConfigs: Map<string, NodeConfig>;
+  public workflowDir: string;
+
+  constructor(
+    public readonly uri: vscode.Uri, 
+    workflow: Workflow,
+    nodeConfigs: Map<string, NodeConfig> = new Map()
+  ) {
+    this.workflow = workflow;
+    this.nodeConfigs = nodeConfigs;
+    this.workflowDir = path.dirname(uri.fsPath);
+  }
+
+  dispose(): void {}
+}
 
 export class WorkflowEditorProvider implements vscode.CustomEditorProvider<WorkflowDocument> {
   private readonly _onDidChangeCustomDocument = new vscode.EventEmitter<vscode.CustomDocumentEditEvent<WorkflowDocument>>();
@@ -17,9 +125,19 @@ export class WorkflowEditorProvider implements vscode.CustomEditorProvider<Workf
     openContext: vscode.CustomDocumentOpenContext,
     _token: vscode.CancellationToken
   ): Promise<WorkflowDocument> {
+    const workflowDir = path.dirname(uri.fsPath);
+    
+    // 使用 WorkflowLoader 加载工作流和配置
+    const result = await WorkflowLoader.loadFromDirectory(workflowDir);
+    
+    if (result.success && result.workflow) {
+      return new WorkflowDocument(uri, result.workflow, result.nodeConfigs);
+    }
+    
+    // 如果加载失败，尝试直接读取文件
     const content = await vscode.workspace.fs.readFile(uri);
     const workflow: Workflow = JSON.parse(Buffer.from(content).toString('utf-8'));
-    return new WorkflowDocument(uri, workflow);
+    return new WorkflowDocument(uri, workflow, new Map());
   }
 
   async resolveCustomEditor(
@@ -39,7 +157,8 @@ export class WorkflowEditorProvider implements vscode.CustomEditorProvider<Workf
         case 'ready':
           webviewPanel.webview.postMessage({
             type: 'init',
-            workflow: document.workflow
+            workflow: document.workflow,
+            nodeConfigs: Object.fromEntries(document.nodeConfigs)
           });
           break;
 
@@ -59,6 +178,10 @@ export class WorkflowEditorProvider implements vscode.CustomEditorProvider<Workf
 
         case 'updateNode':
           this.handleUpdateNode(document, message.node, webviewPanel.webview);
+          break;
+
+        case 'updateNodeConfig':
+          this.handleUpdateNodeConfig(document, message.nodeId, message.config);
           break;
 
         case 'addEdge':
@@ -81,13 +204,33 @@ export class WorkflowEditorProvider implements vscode.CustomEditorProvider<Workf
   }
 
   private async saveDocument(document: WorkflowDocument): Promise<void> {
-    const content = JSON.stringify(document.workflow, null, 2);
-    await vscode.workspace.fs.writeFile(document.uri, Buffer.from(content, 'utf-8'));
+    // 使用 WorkflowLoader 保存工作流和配置文件
+    const result = await WorkflowLoader.saveToDirectory(
+      document.workflowDir,
+      document.workflow,
+      document.nodeConfigs
+    );
+    
+    if (!result.success) {
+      vscode.window.showErrorMessage(`保存失败: ${result.error}`);
+    }
   }
 
   private handleAddNode(document: WorkflowDocument, node: WorkflowNode, webview: vscode.Webview): void {
+    // 生成默认配置
+    const config = createDefaultNodeConfig(node.type as NodeType);
+    document.nodeConfigs.set(node.id, config);
+    
+    // 设置 configRef
+    const ext = getConfigExtension(node.type as NodeType, config);
+    if (ext === '.json') {
+      node.configRef = `nodes/${node.id}_${node.type}.json`;
+    } else {
+      node.configRef = `nodes/${node.id}_${node.type}${ext}`;
+    }
+    
     document.workflow.nodes.push(node);
-    webview.postMessage({ type: 'nodeAdded', node });
+    webview.postMessage({ type: 'nodeAdded', node, config });
   }
 
   private handleRemoveNode(document: WorkflowDocument, nodeId: string, webview: vscode.Webview): void {
@@ -95,6 +238,8 @@ export class WorkflowEditorProvider implements vscode.CustomEditorProvider<Workf
     document.workflow.edges = document.workflow.edges.filter(
       e => e.source.nodeId !== nodeId && e.target.nodeId !== nodeId
     );
+    // 删除对应的配置
+    document.nodeConfigs.delete(nodeId);
     webview.postMessage({ type: 'nodeRemoved', nodeId });
   }
 
@@ -104,6 +249,10 @@ export class WorkflowEditorProvider implements vscode.CustomEditorProvider<Workf
       document.workflow.nodes[index] = node;
       webview.postMessage({ type: 'nodeUpdated', node });
     }
+  }
+
+  private handleUpdateNodeConfig(document: WorkflowDocument, nodeId: string, config: NodeConfig): void {
+    document.nodeConfigs.set(nodeId, config);
   }
 
   private handleAddEdge(document: WorkflowDocument, edge: WorkflowEdge, webview: vscode.Webview): void {
@@ -220,12 +369,8 @@ export class WorkflowEditorProvider implements vscode.CustomEditorProvider<Workf
       overflow: hidden;
       cursor: default;
     }
-    .canvas-container.panning {
-      cursor: grab;
-    }
-    .canvas-container.panning.active {
-      cursor: grabbing;
-    }
+    .canvas-container.panning { cursor: grab; }
+    .canvas-container.panning.active { cursor: grabbing; }
     
     #canvas {
       width: 100%;
@@ -236,20 +381,15 @@ export class WorkflowEditorProvider implements vscode.CustomEditorProvider<Workf
     
     .canvas-bg {
       position: absolute;
-      top: 0;
-      left: 0;
-      right: 0;
-      bottom: 0;
-      background-image: 
-        radial-gradient(circle, var(--vscode-editorRuler-foreground) 1px, transparent 1px);
+      top: 0; left: 0; right: 0; bottom: 0;
+      background-image: radial-gradient(circle, var(--vscode-editorRuler-foreground) 1px, transparent 1px);
       background-size: 20px 20px;
       pointer-events: none;
     }
     
     .nodes-container {
       position: absolute;
-      top: 0;
-      left: 0;
+      top: 0; left: 0;
       width: 100%;
       height: 100%;
     }
@@ -273,9 +413,7 @@ export class WorkflowEditorProvider implements vscode.CustomEditorProvider<Workf
       border-color: var(--vscode-button-background);
       box-shadow: 0 0 0 2px var(--vscode-button-background);
     }
-    .node.dragging {
-      opacity: 0.8;
-    }
+    .node.dragging { opacity: 0.8; }
     .node-header {
       padding: 8px 12px;
       background: var(--vscode-editorGroupHeader-tabsBackground);
@@ -332,8 +470,7 @@ export class WorkflowEditorProvider implements vscode.CustomEditorProvider<Workf
     /* 边（连线） */
     #edges-svg {
       position: absolute;
-      top: 0;
-      left: 0;
+      top: 0; left: 0;
       width: 100%;
       height: 100%;
       pointer-events: none;
@@ -351,7 +488,6 @@ export class WorkflowEditorProvider implements vscode.CustomEditorProvider<Workf
       opacity: 1;
     }
     
-    /* 临时连线 */
     #temp-edge {
       stroke: var(--vscode-button-background);
       stroke-width: 2;
@@ -395,7 +531,7 @@ export class WorkflowEditorProvider implements vscode.CustomEditorProvider<Workf
     
     /* 右侧属性面板 */
     .properties-panel {
-      width: 280px;
+      width: 300px;
       background: var(--vscode-sideBar-background);
       border-left: 1px solid var(--vscode-sideBar-border);
       padding: 15px;
@@ -442,8 +578,17 @@ export class WorkflowEditorProvider implements vscode.CustomEditorProvider<Workf
       cursor: pointer;
       font-size: 12px;
     }
-    .btn-danger:hover {
-      background: #b71c1c;
+    .btn-danger:hover { background: #b71c1c; }
+    
+    .config-section {
+      margin-top: 15px;
+      padding-top: 15px;
+      border-top: 1px dashed var(--vscode-sideBar-border);
+    }
+    .config-section h4 {
+      margin-bottom: 10px;
+      font-size: 12px;
+      color: var(--vscode-descriptionForeground);
     }
     
     /* 提示信息 */
@@ -535,6 +680,7 @@ export class WorkflowEditorProvider implements vscode.CustomEditorProvider<Workf
     
     // 状态
     let workflow = null;
+    let nodeConfigs = {};
     let selectedNode = null;
     let scale = 1;
     let offset = { x: 0, y: 0 };
@@ -564,11 +710,18 @@ export class WorkflowEditorProvider implements vscode.CustomEditorProvider<Workf
       switch (message.type) {
         case 'init':
           workflow = message.workflow;
+          nodeConfigs = message.nodeConfigs || {};
           render();
           fitToScreen();
           break;
         case 'saved':
           console.log('Workflow saved');
+          break;
+        case 'nodeAdded':
+          // 更新本地配置
+          if (message.config) {
+            nodeConfigs[message.node.id] = message.config;
+          }
           break;
       }
     });
@@ -594,7 +747,6 @@ export class WorkflowEditorProvider implements vscode.CustomEditorProvider<Workf
       const oldScale = scale;
       scale = Math.max(MIN_SCALE, Math.min(MAX_SCALE, newScale));
       
-      // 以鼠标位置为中心缩放
       if (centerX !== undefined && centerY !== undefined) {
         offset.x = centerX - (centerX - offset.x) * (scale / oldScale);
         offset.y = centerY - (centerY - offset.y) * (scale / oldScale);
@@ -609,7 +761,6 @@ export class WorkflowEditorProvider implements vscode.CustomEditorProvider<Workf
       const rect = canvasContainer.getBoundingClientRect();
       const padding = 50;
       
-      // 计算节点边界
       let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
       workflow.nodes.forEach(node => {
         minX = Math.min(minX, node.position.x);
@@ -634,15 +785,13 @@ export class WorkflowEditorProvider implements vscode.CustomEditorProvider<Workf
     
     // ========== 鼠标事件 ==========
     
-    // 中键拖动画布
     canvasContainer.addEventListener('mousedown', e => {
-      if (e.button === 1) { // 中键
+      if (e.button === 1) {
         isPanning = true;
         panStart = { x: e.clientX - offset.x, y: e.clientY - offset.y };
         canvasContainer.classList.add('panning', 'active');
         e.preventDefault();
-      } else if (e.button === 0 && e.target === canvas || e.target.classList.contains('canvas-bg')) {
-        // 左键点击空白区域取消选择
+      } else if (e.button === 0 && (e.target === canvas || e.target.classList.contains('canvas-bg'))) {
         selectNode(null);
       }
     });
@@ -692,14 +841,12 @@ export class WorkflowEditorProvider implements vscode.CustomEditorProvider<Workf
       if (connectingPort) {
         tempEdge.style.display = 'none';
         
-        // 检查是否释放在输入端口上
         const targetPort = e.target.closest('.port-input');
         if (targetPort) {
           const targetNodeEl = targetPort.closest('.node');
           const targetNodeId = targetNodeEl?.dataset.id;
           
           if (targetNodeId && targetNodeId !== connectingPort.nodeId) {
-            // 检查是否已存在连接
             const exists = workflow.edges.some(e => 
               e.source.nodeId === connectingPort.nodeId && e.target.nodeId === targetNodeId
             );
@@ -720,7 +867,6 @@ export class WorkflowEditorProvider implements vscode.CustomEditorProvider<Workf
       }
     });
     
-    // 滚轮缩放
     canvasContainer.addEventListener('wheel', e => {
       e.preventDefault();
       const rect = canvasContainer.getBoundingClientRect();
@@ -792,14 +938,18 @@ export class WorkflowEditorProvider implements vscode.CustomEditorProvider<Workf
         },
         data: {}
       };
+      
+      vscode.postMessage({ type: 'addNode', node });
       workflow.nodes.push(node);
       render();
       selectNode(node);
     }
     
     function deleteNode(nodeId) {
+      vscode.postMessage({ type: 'removeNode', nodeId });
       workflow.nodes = workflow.nodes.filter(n => n.id !== nodeId);
       workflow.edges = workflow.edges.filter(e => e.source.nodeId !== nodeId && e.target.nodeId !== nodeId);
+      delete nodeConfigs[nodeId];
       selectedNode = null;
       render();
       showEmptyProperties();
@@ -821,30 +971,10 @@ export class WorkflowEditorProvider implements vscode.CustomEditorProvider<Workf
     
     function getNodeIcon(type) {
       const icons = {
-        start: '▶',
-        end: '⏹',
-        code: '</>',
-        llm: '🤖',
-        switch: '⑂',
-        parallel: '∥',
-        http: '🌐',
-        transform: '⟲'
+        start: '▶', end: '⏹', code: '</>', llm: '🤖',
+        switch: '⑂', parallel: '∥', http: '🌐', transform: '⟲'
       };
       return icons[type] || '?';
-    }
-    
-    function getNodeColor(type) {
-      const colors = {
-        start: '#4caf50',
-        end: '#f44336',
-        code: '#2196f3',
-        llm: '#9c27b0',
-        switch: '#ff9800',
-        parallel: '#00bcd4',
-        http: '#607d8b',
-        transform: '#795548'
-      };
-      return colors[type] || '#666';
     }
     
     // ========== 渲染 ==========
@@ -898,10 +1028,8 @@ export class WorkflowEditorProvider implements vscode.CustomEditorProvider<Workf
       document.querySelectorAll('.node').forEach(el => {
         const nodeId = el.dataset.id;
         
-        // 节点拖拽
         el.addEventListener('mousedown', e => {
-          if (e.target.classList.contains('port')) return;
-          if (e.button !== 0) return;
+          if (e.target.classList.contains('port') || e.button !== 0) return;
           
           const node = workflow.nodes.find(n => n.id === nodeId);
           selectNode(node);
@@ -914,14 +1042,12 @@ export class WorkflowEditorProvider implements vscode.CustomEditorProvider<Workf
           e.stopPropagation();
         });
         
-        // 双击编辑
         el.addEventListener('dblclick', e => {
           if (e.target.classList.contains('port')) return;
           vscode.postMessage({ type: 'editNode', nodeId });
         });
       });
       
-      // 端口事件
       document.querySelectorAll('.port-output').forEach(port => {
         port.addEventListener('mousedown', e => {
           const nodeEl = port.closest('.node');
@@ -947,7 +1073,123 @@ export class WorkflowEditorProvider implements vscode.CustomEditorProvider<Workf
     }
     
     function showProperties(node) {
+      const config = nodeConfigs[node.id] || {};
       const panel = document.getElementById('properties-content');
+      
+      let configHtml = '';
+      
+      // 根据节点类型显示不同的配置项
+      switch (node.type) {
+        case 'start':
+          configHtml = \`
+            <div class="config-section">
+              <h4>触发配置</h4>
+              <div class="property-group">
+                <label>触发方式</label>
+                <select id="config-triggerType">
+                  <option value="manual" \${config.triggerType === 'manual' ? 'selected' : ''}>手动触发</option>
+                  <option value="api" \${config.triggerType === 'api' ? 'selected' : ''}>API 调用</option>
+                  <option value="schedule" \${config.triggerType === 'schedule' ? 'selected' : ''}>定时触发</option>
+                  <option value="webhook" \${config.triggerType === 'webhook' ? 'selected' : ''}>Webhook</option>
+                </select>
+              </div>
+            </div>
+          \`;
+          break;
+          
+        case 'code':
+          configHtml = \`
+            <div class="config-section">
+              <h4>代码配置</h4>
+              <div class="property-group">
+                <label>语言</label>
+                <select id="config-language">
+                  <option value="javascript" \${config.language === 'javascript' ? 'selected' : ''}>JavaScript</option>
+                  <option value="typescript" \${config.language === 'typescript' ? 'selected' : ''}>TypeScript</option>
+                  <option value="python" \${config.language === 'python' ? 'selected' : ''}>Python</option>
+                </select>
+              </div>
+              <div class="property-group">
+                <label>超时 (ms)</label>
+                <input type="number" id="config-timeout" value="\${config.timeout || 30000}">
+              </div>
+            </div>
+          \`;
+          break;
+          
+        case 'llm':
+          configHtml = \`
+            <div class="config-section">
+              <h4>LLM 配置</h4>
+              <div class="property-group">
+                <label>Provider</label>
+                <select id="config-provider">
+                  <option value="openai" \${config.model?.provider === 'openai' ? 'selected' : ''}>OpenAI</option>
+                  <option value="anthropic" \${config.model?.provider === 'anthropic' ? 'selected' : ''}>Anthropic</option>
+                  <option value="azure" \${config.model?.provider === 'azure' ? 'selected' : ''}>Azure</option>
+                </select>
+              </div>
+              <div class="property-group">
+                <label>模型</label>
+                <input type="text" id="config-model" value="\${config.model?.model || 'gpt-4'}">
+              </div>
+              <div class="property-group">
+                <label>Temperature</label>
+                <input type="number" id="config-temperature" value="\${config.temperature || 0.7}" step="0.1" min="0" max="2">
+              </div>
+              <div class="property-group">
+                <label>系统提示词</label>
+                <textarea id="config-systemPrompt" rows="3">\${config.systemPrompt || ''}</textarea>
+              </div>
+            </div>
+          \`;
+          break;
+          
+        case 'http':
+          configHtml = \`
+            <div class="config-section">
+              <h4>HTTP 配置</h4>
+              <div class="property-group">
+                <label>URL</label>
+                <input type="text" id="config-url" value="\${config.url || ''}">
+              </div>
+              <div class="property-group">
+                <label>方法</label>
+                <select id="config-method">
+                  <option value="GET" \${config.method === 'GET' ? 'selected' : ''}>GET</option>
+                  <option value="POST" \${config.method === 'POST' ? 'selected' : ''}>POST</option>
+                  <option value="PUT" \${config.method === 'PUT' ? 'selected' : ''}>PUT</option>
+                  <option value="DELETE" \${config.method === 'DELETE' ? 'selected' : ''}>DELETE</option>
+                </select>
+              </div>
+              <div class="property-group">
+                <label>超时 (ms)</label>
+                <input type="number" id="config-timeout" value="\${config.timeout || 30000}">
+              </div>
+            </div>
+          \`;
+          break;
+          
+        case 'switch':
+          configHtml = \`
+            <div class="config-section">
+              <h4>分支配置</h4>
+              <div class="property-group">
+                <label>评估模式</label>
+                <select id="config-evaluationMode">
+                  <option value="first-match" \${config.evaluationMode === 'first-match' ? 'selected' : ''}>首个匹配</option>
+                  <option value="all-match" \${config.evaluationMode === 'all-match' ? 'selected' : ''}>全部匹配</option>
+                </select>
+              </div>
+              <div class="property-group">
+                <label>分支数量</label>
+                <input type="number" value="\${(config.branches || []).length}" disabled>
+              </div>
+            </div>
+          \`;
+          break;
+      }
+      
       panel.innerHTML = \`
         <div class="property-group">
           <label>ID</label>
@@ -963,7 +1205,7 @@ export class WorkflowEditorProvider implements vscode.CustomEditorProvider<Workf
         </div>
         <div class="property-group">
           <label>描述</label>
-          <textarea id="prop-desc" rows="3">\${node.metadata.description || ''}</textarea>
+          <textarea id="prop-desc" rows="2">\${node.metadata.description || ''}</textarea>
         </div>
         <div class="property-group">
           <label>位置</label>
@@ -972,9 +1214,11 @@ export class WorkflowEditorProvider implements vscode.CustomEditorProvider<Workf
             <input type="number" id="prop-y" value="\${Math.round(node.position.y)}" style="width: 50%">
           </div>
         </div>
+        \${configHtml}
         <button class="btn-danger" id="btn-delete-node">🗑️ 删除节点</button>
       \`;
       
+      // 基本属性事件
       document.getElementById('prop-name').addEventListener('change', e => {
         node.metadata.name = e.target.value;
         renderNodes();
@@ -995,9 +1239,56 @@ export class WorkflowEditorProvider implements vscode.CustomEditorProvider<Workf
         render();
       });
       
+      // 配置更新事件
+      const configInputs = panel.querySelectorAll('[id^="config-"]');
+      configInputs.forEach(input => {
+        input.addEventListener('change', () => {
+          updateNodeConfig(node.id);
+        });
+      });
+      
       document.getElementById('btn-delete-node').addEventListener('click', () => {
         deleteNode(node.id);
       });
+    }
+    
+    function updateNodeConfig(nodeId) {
+      const config = nodeConfigs[nodeId] || {};
+      const node = workflow.nodes.find(n => n.id === nodeId);
+      if (!node) return;
+      
+      // 根据类型读取配置
+      switch (node.type) {
+        case 'start':
+          config.triggerType = document.getElementById('config-triggerType')?.value || 'manual';
+          break;
+          
+        case 'code':
+          config.language = document.getElementById('config-language')?.value || 'javascript';
+          config.timeout = parseInt(document.getElementById('config-timeout')?.value) || 30000;
+          break;
+          
+        case 'llm':
+          config.model = config.model || {};
+          config.model.provider = document.getElementById('config-provider')?.value || 'openai';
+          config.model.model = document.getElementById('config-model')?.value || 'gpt-4';
+          config.temperature = parseFloat(document.getElementById('config-temperature')?.value) || 0.7;
+          config.systemPrompt = document.getElementById('config-systemPrompt')?.value || '';
+          break;
+          
+        case 'http':
+          config.url = document.getElementById('config-url')?.value || '';
+          config.method = document.getElementById('config-method')?.value || 'GET';
+          config.timeout = parseInt(document.getElementById('config-timeout')?.value) || 30000;
+          break;
+          
+        case 'switch':
+          config.evaluationMode = document.getElementById('config-evaluationMode')?.value || 'first-match';
+          break;
+      }
+      
+      nodeConfigs[nodeId] = config;
+      vscode.postMessage({ type: 'updateNodeConfig', nodeId, config });
     }
     
     function showEmptyProperties() {
@@ -1008,16 +1299,6 @@ export class WorkflowEditorProvider implements vscode.CustomEditorProvider<Workf
 </body>
 </html>`;
   }
-}
-
-class WorkflowDocument implements vscode.CustomDocument {
-  public workflow: Workflow;
-
-  constructor(public readonly uri: vscode.Uri, workflow: Workflow) {
-    this.workflow = workflow;
-  }
-
-  dispose(): void {}
 }
 
 function getNonce(): string {
