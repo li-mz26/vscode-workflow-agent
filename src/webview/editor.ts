@@ -1544,7 +1544,7 @@ export class WorkflowEditorProvider implements vscode.CustomEditorProvider<Workf
           const step = portHeight / (branches.length + 1);
           outputPorts = branches.map((branch, i) => {
             const topOffset = 20 + step * (i + 1);
-            return \`<div class="port port-output port-branch" data-port="output" data-branch-id="\${branch.id}" style="top: \${topOffset}px;" title="\${branch.name}: \${branch.condition}"></div>\`;
+            return '<div class="port port-output port-branch" data-port="output" data-branch-id="' + branch.id + '" style="top: ' + topOffset + 'px;" title="' + branch.name + ': ' + branch.condition + '"></div>';
           }).join('');
         } else if (node.type === 'parallel' && node.detail?.parallelBranches) {
           // parallel 节点显示多个分支端口
@@ -1553,27 +1553,26 @@ export class WorkflowEditorProvider implements vscode.CustomEditorProvider<Workf
           const step = portHeight / (branches.length + 1);
           outputPorts = branches.map((branch, i) => {
             const topOffset = 20 + step * (i + 1);
-            return \`<div class="port port-output port-branch" data-port="output" data-branch-id="\${branch.id}" style="top: \${topOffset}px;" title="\${branch.name}"></div>\`;
+            return '<div class="port port-output port-branch" data-port="output" data-branch-id="' + branch.id + '" style="top: ' + topOffset + 'px;" title="' + branch.name + '"></div>';
           }).join('');
         } else if (node.type !== 'end') {
           // 普通节点单一输出端口
           outputPorts = '<div class="port port-output" data-port="output"></div>';
         }
         
-        return \`
-        <div class="node node-type-\${node.type} \${selectedNode?.id === node.id ? 'selected' : ''} \${statusClass}" 
-             data-id="\${node.id}" 
-             style="left: \${node.position.x}px; top: \${node.position.y}px;">
-          <div class="node-status-badge \${status || ''}">\${statusIcon}</div>
-          <div class="node-header">
-            <span class="node-type-icon">\${getNodeIcon(node.type)}</span>
-            <span>\${node.metadata.name}</span>
-          </div>
-          <div class="node-body">\${node.metadata.description || '双击编辑'}</div>
-          \${node.type !== 'start' ? '<div class="port port-input" data-port="input"></div>' : ''}
-          \${outputPorts}
-        </div>
-      \`}).join('');
+        return '<div class="node node-type-' + node.type + ' ' + (selectedNode?.id === node.id ? 'selected' : '') + ' ' + statusClass + '" ' +
+             'data-id="' + node.id + '" ' +
+             'style="left: ' + node.position.x + 'px; top: ' + node.position.y + 'px;">' +
+          '<div class="node-status-badge ' + (status || '') + '">' + statusIcon + '</div>' +
+          '<div class="node-header">' +
+            '<span class="node-type-icon">' + getNodeIcon(node.type) + '</span>' +
+            '<span>' + node.metadata.name + '</span>' +
+          '</div>' +
+          '<div class="node-body">' + (node.metadata.description || '双击编辑') + '</div>' +
+          (node.type !== 'start' ? '<div class="port port-input" data-port="input"></div>' : '') +
+          outputPorts +
+        '</div>';
+      }).join('');
       attachNodeEvents();
     }
     
@@ -1602,7 +1601,7 @@ export class WorkflowEditorProvider implements vscode.CustomEditorProvider<Workf
         const y2 = targetNode.position.y + 40;
         
         const isActive = executedEdges.has(edge.id) ? 'active' : '';
-        return \`<path class="\${isActive}" data-edge-id="\${edge.id}" d="M \${x1} \${y1} C \${x1 + 50} \${y1}, \${x2 - 50} \${y2}, \${x2} \${y2}" stroke-linecap="round"/>\`;
+        return '<path class="' + isActive + '" data-edge-id="' + edge.id + '" d="M ' + x1 + ' ' + y1 + ' C ' + (x1 + 50) + ' ' + y1 + ', ' + (x2 - 50) + ' ' + y2 + ', ' + x2 + ' ' + y2 + '" stroke-linecap="round"/>';
       }).join('');
       edgesSvg.innerHTML = paths + '<path id="temp-edge" style="display: none;"/>';
     }
