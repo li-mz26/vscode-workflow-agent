@@ -287,18 +287,35 @@ export class WorkflowEditorProvider implements vscode.CustomEditorProvider<Workf
   private async runWorkflow(document: WorkflowDocument, webview: vscode.Webview): Promise<void> {
     const { WorkflowEngine } = await import('../engine');
     
+    // 重置所有节点状态
+    webview.postMessage({ type: 'executionStart', nodeIds: document.workflow.nodes.map(n => n.id) });
+    
     vscode.window.showInformationMessage('开始运行工作流...');
     
     const engine = new WorkflowEngine();
     
-    // 监听执行事件
+    // 监听执行事件，实时推送到 webview
     engine.on((event) => {
       if (event.type === 'node:start') {
-        console.log(`[Engine] Node ${event.nodeId} starting`);
+        webview.postMessage({ 
+          type: 'nodeStatus', 
+          nodeId: event.nodeId, 
+          status: 'running' 
+        });
       } else if (event.type === 'node:end') {
-        console.log(`[Engine] Node ${event.result.nodeId} finished:`, event.result.status);
+        const result = event.result;
+        webview.postMessage({ 
+          type: 'nodeStatus', 
+          nodeId: result.nodeId, 
+          status: result.status,
+          edgeId: findEdgeEndingAt(document.workflow, result.nodeId)
+        });
       } else if (event.type === 'workflow:end') {
-        console.log('[Engine] Workflow finished:', event.result.status);
+        webview.postMessage({ 
+          type: 'executionEnd', 
+          status: event.result.status,
+          error: event.result.error
+        });
       }
     });
     
@@ -331,12 +348,9 @@ export class WorkflowEditorProvider implements vscode.CustomEditorProvider<Workf
       }
       outputChannel.show();
       
-      // 通知 webview 运行完成
-      webview.postMessage({ type: 'runComplete', result });
-      
     } catch (error) {
       vscode.window.showErrorMessage(`运行错误: ${error}`);
-      webview.postMessage({ type: 'runError', error: String(error) });
+      webview.postMessage({ type: 'executionEnd', status: 'failed', error: String(error) });
     }
   }
 
@@ -548,6 +562,61 @@ export class WorkflowEditorProvider implements vscode.CustomEditorProvider<Workf
     .node-type-switch .node-type-icon { background: #ff9800; }
     .node-type-parallel .node-type-icon { background: #00bcd4; }
     
+    /* 节点执行状态 */
+    .node-status-badge {
+      position: absolute;
+      top: -8px;
+      right: -8px;
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      font-size: 10px;
+      font-weight: bold;
+      color: white;
+      z-index: 10;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+    }
+    .node-status-badge.running {
+      display: flex;
+      background: #2196f3;
+      animation: pulse 1s infinite;
+    }
+    .node-status-badge.success {
+      display: flex;
+      background: #4caf50;
+    }
+    .node-status-badge.failed {
+      display: flex;
+      background: #f44336;
+    }
+    .node-status-badge.pending {
+      display: flex;
+      background: #9e9e9e;
+    }
+    
+    @keyframes pulse {
+      0%, 100% { transform: scale(1); opacity: 1; }
+      50% { transform: scale(1.1); opacity: 0.8; }
+    }
+    
+    /* 节点状态边框 */
+    .node.status-running {
+      border-color: #2196f3 !important;
+      box-shadow: 0 0 12px rgba(33, 150, 243, 0.5);
+    }
+    .node.status-success {
+      border-color: #4caf50 !important;
+    }
+    .node.status-failed {
+      border-color: #f44336 !important;
+    }
+    .node.status-pending {
+      border-color: #9e9e9e !important;
+    }
+    
     .node-body {
       padding: 10px 12px;
       font-size: 12px;
@@ -586,6 +655,12 @@ export class WorkflowEditorProvider implements vscode.CustomEditorProvider<Workf
       stroke: var(--vscode-editor-foreground);
       stroke-width: 2;
       opacity: 0.5;
+      transition: stroke 0.3s, opacity 0.3s, stroke-width 0.3s;
+    }
+    #edges-svg path.active {
+      stroke: #4caf50;
+      stroke-width: 3;
+      opacity: 1;
     }
     
     #temp-edge {
@@ -925,6 +1000,8 @@ export class WorkflowEditorProvider implements vscode.CustomEditorProvider<Workf
     let selectedNode = null;
     let currentView = 'visual';
     let history = new HistoryManager(50);
+    let executionStatus = {}; // 节点执行状态
+    let executedEdges = new Set(); // 已执行的边
     
     let scale = 1;
     let offset = { x: 0, y: 0 };
@@ -985,6 +1062,38 @@ export class WorkflowEditorProvider implements vscode.CustomEditorProvider<Workf
           }
           break;
         case 'nodeRemoved':
+          break;
+        // 执行事件处理
+        case 'executionStart':
+          // 重置所有节点状态为 pending
+          executionStatus = {};
+          message.nodeIds.forEach(id => {
+            executionStatus[id] = 'pending';
+          });
+          executedEdges = new Set();
+          renderNodes();
+          renderEdges();
+          break;
+        case 'nodeStatus':
+          // 更新节点状态
+          executionStatus[message.nodeId] = message.status;
+          if (message.edgeId) {
+            executedEdges.add(message.edgeId);
+          }
+          renderNodes();
+          renderEdges();
+          break;
+        case 'executionEnd':
+          // 执行结束
+          if (message.status === 'failed') {
+            // 标记所有 pending 节点为 failed
+            Object.keys(executionStatus).forEach(id => {
+              if (executionStatus[id] === 'pending' || executionStatus[id] === 'running') {
+                executionStatus[id] = 'failed';
+              }
+            });
+            renderNodes();
+          }
           break;
       }
     });
@@ -1353,10 +1462,21 @@ export class WorkflowEditorProvider implements vscode.CustomEditorProvider<Workf
     }
     
     function renderNodes() {
-      nodesContainer.innerHTML = workflow.nodes.map(node => \`
-        <div class="node node-type-\${node.type} \${selectedNode?.id === node.id ? 'selected' : ''}" 
+      nodesContainer.innerHTML = workflow.nodes.map(node => {
+        const status = executionStatus[node.id];
+        const statusClass = status ? \`status-\${status}\` : '';
+        const statusIcon = {
+          'running': '⚙',
+          'success': '✓',
+          'failed': '✗',
+          'pending': '○'
+        }[status] || '';
+        
+        return \`
+        <div class="node node-type-\${node.type} \${selectedNode?.id === node.id ? 'selected' : ''} \${statusClass}" 
              data-id="\${node.id}" 
              style="left: \${node.position.x}px; top: \${node.position.y}px;">
+          <div class="node-status-badge \${status || ''}">\${statusIcon}</div>
           <div class="node-header">
             <span class="node-type-icon">\${getNodeIcon(node.type)}</span>
             <span>\${node.metadata.name}</span>
@@ -1365,7 +1485,7 @@ export class WorkflowEditorProvider implements vscode.CustomEditorProvider<Workf
           \${node.type !== 'start' ? '<div class="port port-input" data-port="input"></div>' : ''}
           \${node.type !== 'end' ? '<div class="port port-output" data-port="output"></div>' : ''}
         </div>
-      \`).join('');
+      \`}).join('');
       attachNodeEvents();
     }
     
@@ -1378,7 +1498,8 @@ export class WorkflowEditorProvider implements vscode.CustomEditorProvider<Workf
         const y1 = sourceNode.position.y + 40;
         const x2 = targetNode.position.x;
         const y2 = targetNode.position.y + 40;
-        return \`<path d="M \${x1} \${y1} C \${x1 + 50} \${y1}, \${x2 - 50} \${y2}, \${x2} \${y2}" stroke-linecap="round"/>\`;
+        const isActive = executedEdges.has(edge.id) ? 'active' : '';
+        return \`<path class="\${isActive}" d="M \${x1} \${y1} C \${x1 + 50} \${y1}, \${x2 - 50} \${y2}, \${x2} \${y2}" stroke-linecap="round"/>\`;
       }).join('');
       edgesSvg.innerHTML = paths + '<path id="temp-edge" style="display: none;"/>';
     }
@@ -1544,6 +1665,14 @@ export class WorkflowEditorProvider implements vscode.CustomEditorProvider<Workf
 </body>
 </html>`;
   }
+}
+
+/**
+ * 查找指向目标节点的边 ID
+ */
+function findEdgeEndingAt(workflow: Workflow, targetNodeId: string): string | undefined {
+  const edge = workflow.edges.find(e => e.target.nodeId === targetNodeId);
+  return edge?.id;
 }
 
 function getNonce(): string {
