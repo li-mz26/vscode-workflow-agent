@@ -252,13 +252,37 @@ export class WorkflowEditorProvider implements vscode.CustomEditorProvider<Workf
     }
     console.log('[Editor] Node with configRef:', node);
     
-    // 注意：不在这里 push 节点到 document.workflow.nodes
-    // 因为保存时会用 webview 发来的 workflow 覆盖
-    // webview 会在收到 nodeAdded 响应后处理节点的添加
+    // 立即创建配置文件
+    this.createNodeConfigFile(document, node, config);
     
     // 发送带有 configRef 的节点给 webview
     webview.postMessage({ type: 'nodeAdded', node, config });
     console.log('[Editor] Sent nodeAdded message to webview');
+  }
+  
+  /**
+   * 立即创建节点配置文件（空文件）
+   */
+  private async createNodeConfigFile(document: WorkflowDocument, node: WorkflowNode, config: NodeConfig): Promise<void> {
+    const path = await import('path');
+    const fs = await import('fs');
+    
+    const nodesDir = path.join(document.workflowDir, 'nodes');
+    
+    // 确保 nodes 目录存在
+    if (!fs.existsSync(nodesDir)) {
+      await fs.promises.mkdir(nodesDir, { recursive: true });
+      console.log('[Editor] Created nodes directory:', nodesDir);
+    }
+    
+    // 确定文件名
+    const ext = getConfigExtension(node.type as NodeType, config);
+    const fileName = `${node.id}_${node.type}${ext}`;
+    const filePath = path.join(nodesDir, fileName);
+    
+    // 写入空文件
+    await fs.promises.writeFile(filePath, '', 'utf-8');
+    console.log('[Editor] Created empty config file:', filePath);
   }
 
   private handleRemoveNode(document: WorkflowDocument, nodeId: string, webview: vscode.Webview): void {
