@@ -1,0 +1,11 @@
+{
+  "branches": [
+    {
+      "id": "branch_1",
+      "name": "高分",
+      "condition": "data.avg_score >= 80"
+    }
+  ],
+  "defaultBranch": "default",
+  "evaluationMode": "first-match"
+}

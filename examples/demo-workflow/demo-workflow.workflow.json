@@ -1,39 +1,87 @@
 {
   "id": "wf_demo_001",
   "name": "demo-workflow",
-  "description": "示例工作流 - 简单的数据处理流程",
+  "description": "示例工作流 - 数据处理与条件分支",
   "version": "1.0.0",
   "nodes": [
     {
       "id": "node_start",
       "type": "start",
-      "position": { "x": 100, "y": 200 },
+      "position": { "x": 100, "y": 300 },
       "configRef": "nodes/node_start.json",
       "metadata": {
         "name": "开始",
-        "description": "手动触发"
+        "description": "工作流入口"
       }
     },
     {
-      "id": "node_code_001",
+      "id": "node_fetch_data",
       "type": "code",
-      "position": { "x": 350, "y": 200 },
-      "configRef": "nodes/node_code_001.py",
-      "inputs": { "input": "any" },
-      "outputs": { "result": "object" },
+      "position": { "x": 300, "y": 300 },
+      "configRef": "nodes/node_fetch_data.py",
       "metadata": {
-        "name": "数据处理",
-        "description": "Python 处理输入数据"
+        "name": "获取数据",
+        "description": "生成模拟数据"
+      }
+    },
+    {
+      "id": "node_check_score",
+      "type": "switch",
+      "position": { "x": 500, "y": 300 },
+      "configRef": "nodes/node_check_score.json",
+      "metadata": {
+        "name": "分数判断",
+        "description": "根据分数分支"
+      }
+    },
+    {
+      "id": "node_process_high",
+      "type": "code",
+      "position": { "x": 700, "y": 150 },
+      "configRef": "nodes/node_process_high.py",
+      "metadata": {
+        "name": "高分处理",
+        "description": "分数>=80的处理"
+      }
+    },
+    {
+      "id": "node_process_low",
+      "type": "code",
+      "position": { "x": 700, "y": 450 },
+      "configRef": "nodes/node_process_low.py",
+      "metadata": {
+        "name": "低分处理",
+        "description": "分数<80的处理"
+      }
+    },
+    {
+      "id": "node_parallel_tasks",
+      "type": "parallel",
+      "position": { "x": 900, "y": 300 },
+      "configRef": "nodes/node_parallel_tasks.json",
+      "metadata": {
+        "name": "并行任务",
+        "description": "同时执行多个任务"
+      }
+    },
+    {
+      "id": "node_summary",
+      "type": "code",
+      "position": { "x": 1100, "y": 300 },
+      "configRef": "nodes/node_summary.py",
+      "metadata": {
+        "name": "汇总结果",
+        "description": "合并处理结果"
       }
     },
     {
       "id": "node_end",
       "type": "end",
-      "position": { "x": 600, "y": 200 },
+      "position": { "x": 1300, "y": 300 },
       "configRef": "nodes/node_end.json",
       "metadata": {
         "name": "结束",
-        "description": "输出结果"
+        "description": "工作流出口"
       }
     }
   ],
@@ -41,18 +89,50 @@
     {
       "id": "edge_001",
       "source": { "nodeId": "node_start", "portId": "output" },
-      "target": { "nodeId": "node_code_001", "portId": "input" }
+      "target": { "nodeId": "node_fetch_data", "portId": "input" }
     },
     {
       "id": "edge_002",
-      "source": { "nodeId": "node_code_001", "portId": "output" },
+      "source": { "nodeId": "node_fetch_data", "portId": "output" },
+      "target": { "nodeId": "node_check_score", "portId": "input" }
+    },
+    {
+      "id": "edge_003",
+      "source": { "nodeId": "node_check_score", "portId": "output" },
+      "target": { "nodeId": "node_process_high", "portId": "input" },
+      "condition": "branch_1"
+    },
+    {
+      "id": "edge_004",
+      "source": { "nodeId": "node_check_score", "portId": "output" },
+      "target": { "nodeId": "node_process_low", "portId": "input" },
+      "condition": "default"
+    },
+    {
+      "id": "edge_005",
+      "source": { "nodeId": "node_process_high", "portId": "output" },
+      "target": { "nodeId": "node_parallel_tasks", "portId": "input" }
+    },
+    {
+      "id": "edge_006",
+      "source": { "nodeId": "node_process_low", "portId": "output" },
+      "target": { "nodeId": "node_parallel_tasks", "portId": "input" }
+    },
+    {
+      "id": "edge_007",
+      "source": { "nodeId": "node_parallel_tasks", "portId": "output" },
+      "target": { "nodeId": "node_summary", "portId": "input" }
+    },
+    {
+      "id": "edge_008",
+      "source": { "nodeId": "node_summary", "portId": "output" },
       "target": { "nodeId": "node_end", "portId": "input" }
     }
   ],
   "metadata": {
     "author": "demo",
     "createdAt": "2026-03-12T00:00:00.000Z",
-    "updatedAt": "2026-03-12T07:50:00.000Z",
-    "tags": ["demo", "example"]
+    "updatedAt": "2026-03-12T08:00:00.000Z",
+    "tags": ["demo", "example", "branch", "parallel"]
   }
 }

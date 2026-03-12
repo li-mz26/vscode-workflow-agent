@@ -1,0 +1,14 @@
+{
+  "branches": [
+    {
+      "id": "task_stats",
+      "name": "统计分析"
+    },
+    {
+      "id": "task_report",
+      "name": "生成报告"
+    }
+  ],
+  "waitMode": "all",
+  "failMode": "stop"
+}
