@@ -415,15 +415,12 @@ export class WorkflowMCPServer {
 
   private handleNodeTypesList(): any {
     const types: { type: NodeType; description: string }[] = [
-      { type: 'start', description: '开始节点 - 工作流入口，支持手动/API/定时/ webhook 触发' },
+      { type: 'start', description: '开始节点 - 工作流入口，支持手动/API触发' },
       { type: 'end', description: '结束节点 - 工作流出口，定义输出格式' },
-      { type: 'switch', description: '条件分支 - 根据条件路由到不同分支' },
-      { type: 'parallel', description: '并行执行 - 同时执行多个分支' },
-      { type: 'code', description: '代码执行 - 运行 JavaScript/TypeScript/Python 代码' },
+      { type: 'code', description: '代码执行 - 运行 Python 代码' },
       { type: 'llm', description: 'LLM 调用 - 调用大语言模型进行文本生成' },
-      { type: 'http', description: 'HTTP 请求 - 发送 HTTP 请求调用外部 API' },
-      { type: 'transform', description: '数据转换 - 映射和转换数据结构' },
-      { type: 'delay', description: '延迟 - 等待指定时间' }
+      { type: 'switch', description: '条件分支 - 根据条件路由到不同分支' },
+      { type: 'parallel', description: '并行执行 - 同时执行多个分支' }
     ];
     return { types };
   }

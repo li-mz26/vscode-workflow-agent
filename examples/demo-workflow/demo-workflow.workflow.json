@@ -17,31 +17,19 @@
     {
       "id": "node_code_001",
       "type": "code",
-      "position": { "x": 300, "y": 200 },
-      "configRef": "nodes/node_code_001.js",
+      "position": { "x": 350, "y": 200 },
+      "configRef": "nodes/node_code_001.py",
       "inputs": { "input": "any" },
       "outputs": { "result": "object" },
       "metadata": {
         "name": "数据处理",
-        "description": "处理输入数据"
-      }
-    },
-    {
-      "id": "node_transform_001",
-      "type": "transform",
-      "position": { "x": 500, "y": 200 },
-      "configRef": "nodes/node_transform_001.json",
-      "inputs": { "data": "object" },
-      "outputs": { "output": "object" },
-      "metadata": {
-        "name": "数据转换",
-        "description": "转换数据格式"
+        "description": "Python 处理输入数据"
       }
     },
     {
       "id": "node_end",
       "type": "end",
-      "position": { "x": 700, "y": 200 },
+      "position": { "x": 600, "y": 200 },
       "configRef": "nodes/node_end.json",
       "metadata": {
         "name": "结束",
@@ -58,18 +46,13 @@
     {
       "id": "edge_002",
       "source": { "nodeId": "node_code_001", "portId": "output" },
-      "target": { "nodeId": "node_transform_001", "portId": "input" }
-    },
-    {
-      "id": "edge_003",
-      "source": { "nodeId": "node_transform_001", "portId": "output" },
       "target": { "nodeId": "node_end", "portId": "input" }
     }
   ],
   "metadata": {
     "author": "demo",
     "createdAt": "2026-03-12T00:00:00.000Z",
-    "updatedAt": "2026-03-12T00:00:00.000Z",
+    "updatedAt": "2026-03-12T07:50:00.000Z",
     "tags": ["demo", "example"]
   }
 }

@@ -33,13 +33,10 @@ export interface NodeMetadata {
 export type NodeType = 
   | 'start'      // 开始节点
   | 'end'        // 结束节点
-  | 'switch'     // 条件分支
-  | 'parallel'   // 并行执行
   | 'code'       // 代码执行
   | 'llm'        // LLM 调用
-  | 'http'       // HTTP 请求
-  | 'transform'  // 数据转换
-  | 'delay';     // 延迟
+  | 'switch'     // 条件分支
+  | 'parallel';  // 并行执行
 
 /** 开始节点触发方式 */
 export type StartTriggerType = 'manual' | 'api' | 'schedule' | 'webhook';
@@ -122,39 +119,14 @@ export interface LLMNodeConfig {
   responseFormat?: 'text' | 'json';
 }
 
-/** HTTP 节点配置 */
-export interface HTTPNodeConfig {
-  url: string;
-  method: 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH';
-  headers?: Record<string, string>;
-  body?: any;
-  timeout?: number;
-  retryCount?: number;
-}
-
-/** 数据转换配置 */
-export interface TransformNodeConfig {
-  mapping: Record<string, string>;  // 输出字段 -> 输入路径表达式
-  functions?: string[];  // 内置函数列表
-}
-
-/** 延迟节点配置 */
-export interface DelayNodeConfig {
-  duration: number;
-  unit: 'milliseconds' | 'seconds' | 'minutes' | 'hours';
-}
-
 /** 节点配置联合类型 */
 export type NodeConfig = 
   | StartNodeConfig 
   | EndNodeConfig 
-  | SwitchNodeConfig 
-  | ParallelNodeConfig 
   | CodeNodeConfig 
   | LLMNodeConfig 
-  | HTTPNodeConfig
-  | TransformNodeConfig
-  | DelayNodeConfig;
+  | SwitchNodeConfig 
+  | ParallelNodeConfig;
 
 // ============ 节点定义 ============
 

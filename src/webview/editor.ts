@@ -18,15 +18,14 @@ function createDefaultNodeConfig(type: NodeType): NodeConfig {
       return { outputMode: 'last' };
     case 'code':
       return {
-        language: 'javascript',
-        code: `// 在此编写代码
-// input: 输入数据
-// 返回值将作为输出
+        language: 'python',
+        code: `# 在此编写代码
+# input: 输入数据
+# 返回值将作为输出
 
-module.exports = async function(input) {
-  console.log('Input:', input);
-  return { result: input };
-};`,
+def main(input):
+    print(f"Input: {input}")
+    return {"result": input}`,
         timeout: 30000
       };
     case 'llm':
@@ -49,17 +48,6 @@ module.exports = async function(input) {
         waitMode: 'all',
         failMode: 'stop'
       };
-    case 'http':
-      return {
-        url: 'https://api.example.com/endpoint',
-        method: 'GET',
-        headers: { 'Content-Type': 'application/json' },
-        timeout: 30000
-      };
-    case 'transform':
-      return { mapping: { 'output': 'input' } };
-    case 'delay':
-      return { duration: 1, unit: 'seconds' };
     default:
       return {} as NodeConfig;
   }
@@ -559,8 +547,6 @@ export class WorkflowEditorProvider implements vscode.CustomEditorProvider<Workf
     .node-type-llm .node-type-icon { background: #9c27b0; }
     .node-type-switch .node-type-icon { background: #ff9800; }
     .node-type-parallel .node-type-icon { background: #00bcd4; }
-    .node-type-http .node-type-icon { background: #607d8b; }
-    .node-type-transform .node-type-icon { background: #795548; }
     
     .node-body {
       padding: 10px 12px;
@@ -802,8 +788,6 @@ export class WorkflowEditorProvider implements vscode.CustomEditorProvider<Workf
         <button class="toolbar-btn" data-type="llm" title="LLM 节点"><span class="icon">🤖</span><span>LLM</span></button>
         <button class="toolbar-btn" data-type="switch" title="条件分支"><span class="icon">⑂</span><span>分支</span></button>
         <button class="toolbar-btn" data-type="parallel" title="并行执行"><span class="icon">∥</span><span>并行</span></button>
-        <button class="toolbar-btn" data-type="http" title="HTTP 请求"><span class="icon">🌐</span><span>HTTP</span></button>
-        <button class="toolbar-btn" data-type="transform" title="数据转换"><span class="icon">⟲</span><span>转换</span></button>
       </div>
       
       <div class="canvas-container" id="canvas-container">
@@ -1349,7 +1333,7 @@ export class WorkflowEditorProvider implements vscode.CustomEditorProvider<Workf
     function getNodeName(type) {
       const names = {
         start: '开始', end: '结束', code: '代码执行', llm: 'LLM 调用',
-        switch: '条件分支', parallel: '并行执行', http: 'HTTP 请求', transform: '数据转换'
+        switch: '条件分支', parallel: '并行执行'
       };
       return names[type] || type;
     }
@@ -1357,7 +1341,7 @@ export class WorkflowEditorProvider implements vscode.CustomEditorProvider<Workf
     function getNodeIcon(type) {
       const icons = {
         start: '▶', end: '⏹', code: '</>', llm: '🤖',
-        switch: '⑂', parallel: '∥', http: '🌐', transform: '⟲'
+        switch: '⑂', parallel: '∥'
       };
       return icons[type] || '?';
     }

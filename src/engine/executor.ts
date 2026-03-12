@@ -142,55 +142,6 @@ export class WorkflowEngine {
         return { parallel: true, branches: config.branches, input };
       }
     });
-
-    // HTTP 节点
-    this.nodeExecutors.set('http', {
-      type: 'http',
-      execute: async (config: any, input: any) => {
-        const { url, method = 'GET', headers = {}, body, timeout = 30000 } = config;
-        
-        try {
-          const response = await fetch(url, {
-            method,
-            headers: { 'Content-Type': 'application/json', ...headers },
-            body: method !== 'GET' ? JSON.stringify(body ?? input) : undefined,
-            signal: AbortSignal.timeout(timeout)
-          });
-          
-          const data = await response.json();
-          return { status: response.status, data, headers: Object.fromEntries(response.headers) };
-        } catch (err) {
-          throw new Error(`HTTP request failed: ${err}`);
-        }
-      }
-    });
-
-    // Transform 节点
-    this.nodeExecutors.set('transform', {
-      type: 'transform',
-      execute: async (config: any, input: any) => {
-        const { mapping } = config;
-        const output: any = {};
-        
-        for (const [outputKey, inputPath] of Object.entries(mapping)) {
-          output[outputKey] = getValueByPath(input, inputPath as string);
-        }
-        
-        return output;
-      }
-    });
-
-    // Delay 节点
-    this.nodeExecutors.set('delay', {
-      type: 'delay',
-      execute: async (config: any, input: any) => {
-        const { duration, unit = 'milliseconds' } = config;
-        const ms = duration * (unit === 'seconds' ? 1000 : unit === 'minutes' ? 60000 : unit === 'hours' ? 3600000 : 1);
-        
-        await new Promise(resolve => setTimeout(resolve, ms));
-        return { delayed: true, duration: ms, input };
-      }
-    });
   }
 
   /**
@@ -407,19 +358,6 @@ function evaluateCondition(condition: string, data: any): boolean {
   } catch {
     return false;
   }
-}
-
-/**
- * 按路径获取值
- */
-function getValueByPath(obj: any, path: string): any {
-  const parts = path.split('.');
-  let value = obj;
-  for (const part of parts) {
-    if (value === undefined || value === null) return undefined;
-    value = value[part];
-  }
-  return value;
 }
 
 export default WorkflowEngine;
