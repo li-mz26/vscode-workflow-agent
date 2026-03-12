@@ -21,6 +21,18 @@
   ],
   "main": "./out/extension.js",
   "contributes": {
+    "customEditors": [
+      {
+        "viewType": "workflowAgent.editor",
+        "displayName": "Workflow Editor",
+        "selector": [
+          {
+            "filenamePattern": "*.workflow.json"
+          }
+        ],
+        "priority": "default"
+      }
+    ],
     "commands": [
       {
         "command": "workflowAgent.openWorkflow",
