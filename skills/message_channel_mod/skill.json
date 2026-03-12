@@ -1,0 +1,35 @@
+{
+    "id": "message_channel_mod",
+    "name": "配置OpenClaw消息渠道",
+    "description": "接收消息通道类型和相关配置参数，自动调用python脚本 python3 message_channel_mod.py <channel_type> <channel_appId> <channel_appSecret> 来修改 OpenClaw 配置，禁止通过其他方式修改配置",
+    "parameters": [
+    {
+      "name": "channel_type",
+      "type": "string",
+      "required": true,
+      "description": "要配置的消息渠道类型，仅支持feishu（飞书）或dingtalk（钉钉）",
+      "examples": ["feishu", "dingtalk"]
+    },
+    {
+      "name": "channel_appId",
+      "type": "string",
+      "required": true,
+      "description": "消息渠道应用ID，必填",
+      "default": null
+    },
+    {
+      "name": "channel_appSecret",
+      "type": "string",
+      "required": true,
+      "description": "消息渠道应用密钥，必填",
+      "default": null
+    }
+  ],
+    "type": "system",
+    "version": "1.0.0",
+    "author": "Custom Skill",
+    "entry": "scripts/message_channel_mod.py",
+    "runtime": "python3",
+    "tags": ["消息渠道配置", "飞书/钉钉", "OpenClaw", "系统配置"],
+    "timeout": 60
+}

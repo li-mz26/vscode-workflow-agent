@@ -1,0 +1,28 @@
+{
+    "id": "configure_model",
+    "name": "修改OpenClaw模型配置",
+    "description": "用于修改OpenClaw的模型配置，支持设置默认模型类型和对应的API Key。自动调用脚本 python3 configure_model.py <model_type> <api_key> 来更新配置，禁止通过其他任何方式操作，适用于切换模型（如doubao-seed-code/glm-4.7）、更新API Key的场景。",
+    "parameters": [
+        {
+            "name": "model_type",
+            "type": "string",
+            "required": true,
+            "description": "要设置的默认模型类型，例如：doubao-seed-code、glm-4.7、kimi-k2.5",
+            "examples": ["doubao-seed-code", "glm-4.7", "kimi-k2.5"]
+        },
+        {
+            "name": "api_key",
+            "type": "string",
+            "required": true,
+            "description": "模型对应的API Key（必填，用于调用模型服务）",
+            "examples": ["sk-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"]
+        }
+    ],
+    "type": "system",
+    "version": "1.0.0",
+    "author": "Custom Skill",
+    "entry": "scripts/configure_model.py",
+    "runtime": "python3",
+    "tags": ["模型配置", "API Key", "OpenClaw", "系统配置"],
+    "timeout": 60
+}
