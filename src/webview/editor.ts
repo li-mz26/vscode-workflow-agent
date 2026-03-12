@@ -13,13 +13,9 @@ import { WorkflowLoader } from '../engine/loader';
 function createDefaultNodeConfig(type: NodeType): NodeConfig {
   switch (type) {
     case 'start':
-      return {
-        triggerType: 'manual'
-      };
+      return { triggerType: 'manual' };
     case 'end':
-      return {
-        outputMode: 'last'
-      };
+      return { outputMode: 'last' };
     case 'code':
       return {
         language: 'javascript',
@@ -35,10 +31,7 @@ module.exports = async function(input) {
       };
     case 'llm':
       return {
-        model: {
-          provider: 'openai',
-          model: 'gpt-4'
-        },
+        model: { provider: 'openai', model: 'gpt-4' },
         systemPrompt: '你是一个有帮助的助手。',
         userPrompt: '{{input}}',
         temperature: 0.7,
@@ -46,17 +39,13 @@ module.exports = async function(input) {
       };
     case 'switch':
       return {
-        branches: [
-          { id: 'branch_1', name: '分支 1', condition: 'data.value > 0' }
-        ],
+        branches: [{ id: 'branch_1', name: '分支 1', condition: 'data.value > 0' }],
         defaultBranch: 'default',
         evaluationMode: 'first-match'
       };
     case 'parallel':
       return {
-        branches: [
-          { id: 'parallel_1', name: '并行分支 1' }
-        ],
+        branches: [{ id: 'parallel_1', name: '并行分支 1' }],
         waitMode: 'all',
         failMode: 'stop'
       };
@@ -64,22 +53,13 @@ module.exports = async function(input) {
       return {
         url: 'https://api.example.com/endpoint',
         method: 'GET',
-        headers: {
-          'Content-Type': 'application/json'
-        },
+        headers: { 'Content-Type': 'application/json' },
         timeout: 30000
       };
     case 'transform':
-      return {
-        mapping: {
-          'output': 'input'
-        }
-      };
+      return { mapping: { 'output': 'input' } };
     case 'delay':
-      return {
-        duration: 1,
-        unit: 'seconds'
-      };
+      return { duration: 1, unit: 'seconds' };
     default:
       return {} as NodeConfig;
   }
@@ -126,15 +106,12 @@ export class WorkflowEditorProvider implements vscode.CustomEditorProvider<Workf
     _token: vscode.CancellationToken
   ): Promise<WorkflowDocument> {
     const workflowDir = path.dirname(uri.fsPath);
-    
-    // 使用 WorkflowLoader 加载工作流和配置
     const result = await WorkflowLoader.loadFromDirectory(workflowDir);
     
     if (result.success && result.workflow) {
       return new WorkflowDocument(uri, result.workflow, result.nodeConfigs);
     }
     
-    // 如果加载失败，尝试直接读取文件
     const content = await vscode.workspace.fs.readFile(uri);
     const workflow: Workflow = JSON.parse(Buffer.from(content).toString('utf-8'));
     return new WorkflowDocument(uri, workflow, new Map());
@@ -145,13 +122,9 @@ export class WorkflowEditorProvider implements vscode.CustomEditorProvider<Workf
     webviewPanel: vscode.WebviewPanel,
     _token: vscode.CancellationToken
   ): Promise<void> {
-    webviewPanel.webview.options = {
-      enableScripts: true
-    };
-
+    webviewPanel.webview.options = { enableScripts: true };
     webviewPanel.webview.html = this.getHtml(webviewPanel.webview, document.workflow);
 
-    // 处理来自 webview 的消息
     webviewPanel.webview.onDidReceiveMessage(async (message) => {
       switch (message.type) {
         case 'ready':
@@ -163,7 +136,6 @@ export class WorkflowEditorProvider implements vscode.CustomEditorProvider<Workf
           break;
 
         case 'save':
-          console.log('[Editor] Received save message');
           document.workflow = message.workflow;
           await this.saveDocument(document);
           webviewPanel.webview.postMessage({ type: 'saved' });
@@ -177,28 +149,8 @@ export class WorkflowEditorProvider implements vscode.CustomEditorProvider<Workf
           this.handleRemoveNode(document, message.nodeId, webviewPanel.webview);
           break;
 
-        case 'updateNode':
-          this.handleUpdateNode(document, message.node, webviewPanel.webview);
-          break;
-
         case 'updateNodeConfig':
           this.handleUpdateNodeConfig(document, message.nodeId, message.config);
-          break;
-
-        case 'addEdge':
-          this.handleAddEdge(document, message.edge, webviewPanel.webview);
-          break;
-
-        case 'removeEdge':
-          this.handleRemoveEdge(document, message.edgeId, webviewPanel.webview);
-          break;
-
-        case 'updateEdge':
-          this.handleUpdateEdge(document, message.edge, webviewPanel.webview);
-          break;
-
-        case 'updatePosition':
-          this.handleUpdatePosition(document, message.nodeId, message.position);
           break;
       }
     });
@@ -219,45 +171,29 @@ export class WorkflowEditorProvider implements vscode.CustomEditorProvider<Workf
   }
 
   private handleAddNode(document: WorkflowDocument, node: WorkflowNode, webview: vscode.Webview): void {
-    // 生成默认配置
     const config = createDefaultNodeConfig(node.type as NodeType);
     document.nodeConfigs.set(node.id, config);
     
-    // 设置 configRef
     const ext = getConfigExtension(node.type as NodeType, config);
-    if (ext === '.json') {
-      node.configRef = `nodes/${node.id}_${node.type}.json`;
-    } else {
-      node.configRef = `nodes/${node.id}_${node.type}${ext}`;
-    }
+    node.configRef = ext === '.json' 
+      ? `nodes/${node.id}_${node.type}.json`
+      : `nodes/${node.id}_${node.type}${ext}`;
     
-    // 立即创建配置文件
     this.createNodeConfigFile(document, node, config);
-    
-    // 发送带有 configRef 的节点给 webview
     webview.postMessage({ type: 'nodeAdded', node, config });
   }
   
-  /**
-   * 立即创建节点配置文件（空文件）
-   */
   private async createNodeConfigFile(document: WorkflowDocument, node: WorkflowNode, config: NodeConfig): Promise<void> {
     const path = await import('path');
     const fs = await import('fs');
     
     const nodesDir = path.join(document.workflowDir, 'nodes');
-    
-    // 确保 nodes 目录存在
     if (!fs.existsSync(nodesDir)) {
       await fs.promises.mkdir(nodesDir, { recursive: true });
     }
     
-    // 确定文件名
     const ext = getConfigExtension(node.type as NodeType, config);
-    const fileName = `${node.id}_${node.type}${ext}`;
-    const filePath = path.join(nodesDir, fileName);
-    
-    // 写入空文件
+    const filePath = path.join(nodesDir, `${node.id}_${node.type}${ext}`);
     await fs.promises.writeFile(filePath, '', 'utf-8');
   }
 
@@ -270,52 +206,15 @@ export class WorkflowEditorProvider implements vscode.CustomEditorProvider<Workf
     webview.postMessage({ type: 'nodeRemoved', nodeId });
   }
 
-  private handleUpdateNode(document: WorkflowDocument, node: WorkflowNode, webview: vscode.Webview): void {
-    const index = document.workflow.nodes.findIndex(n => n.id === node.id);
-    if (index >= 0) {
-      document.workflow.nodes[index] = node;
-      webview.postMessage({ type: 'nodeUpdated', node });
-    }
-  }
-
   private handleUpdateNodeConfig(document: WorkflowDocument, nodeId: string, config: NodeConfig): void {
     document.nodeConfigs.set(nodeId, config);
-  }
-
-  private handleAddEdge(document: WorkflowDocument, edge: WorkflowEdge, webview: vscode.Webview): void {
-    document.workflow.edges.push(edge);
-    webview.postMessage({ type: 'edgeAdded', edge });
-  }
-
-  private handleRemoveEdge(document: WorkflowDocument, edgeId: string, webview: vscode.Webview): void {
-    document.workflow.edges = document.workflow.edges.filter(e => e.id !== edgeId);
-    webview.postMessage({ type: 'edgeRemoved', edgeId });
-  }
-
-  private handleUpdateEdge(document: WorkflowDocument, edge: WorkflowEdge, webview: vscode.Webview): void {
-    const index = document.workflow.edges.findIndex(e => e.id === edge.id);
-    if (index >= 0) {
-      document.workflow.edges[index] = edge;
-      webview.postMessage({ type: 'edgeUpdated', edge });
-    }
-  }
-
-  private handleUpdatePosition(document: WorkflowDocument, nodeId: string, position: { x: number; y: number }): void {
-    const node = document.workflow.nodes.find(n => n.id === nodeId);
-    if (node) {
-      node.position = position;
-    }
   }
 
   saveCustomDocument(document: WorkflowDocument, _cancellation: vscode.CancellationToken): Thenable<void> {
     return this.saveDocument(document);
   }
 
-  saveCustomDocumentAs(
-    document: WorkflowDocument,
-    destination: vscode.Uri,
-    _cancellation: vscode.CancellationToken
-  ): Thenable<void> {
+  saveCustomDocumentAs(document: WorkflowDocument, destination: vscode.Uri, _cancellation: vscode.CancellationToken): Thenable<void> {
     const content = JSON.stringify(document.workflow, null, 2);
     return vscode.workspace.fs.writeFile(destination, Buffer.from(content, 'utf-8'));
   }
@@ -326,11 +225,7 @@ export class WorkflowEditorProvider implements vscode.CustomEditorProvider<Workf
     });
   }
 
-  backupCustomDocument(
-    document: WorkflowDocument,
-    context: vscode.CustomDocumentBackupContext,
-    _cancellation: vscode.CancellationToken
-  ): Thenable<vscode.CustomDocumentBackup> {
+  backupCustomDocument(document: WorkflowDocument, context: vscode.CustomDocumentBackupContext, _cancellation: vscode.CancellationToken): Thenable<vscode.CustomDocumentBackup> {
     const content = JSON.stringify(document.workflow, null, 2);
     return vscode.workspace.fs.writeFile(context.destination, Buffer.from(content, 'utf-8')).then(() => ({
       id: context.destination.toString(),
@@ -376,14 +271,37 @@ export class WorkflowEditorProvider implements vscode.CustomEditorProvider<Workf
       align-items: center;
       gap: 6px;
     }
-    .view-tab:hover {
-      color: var(--vscode-foreground);
-    }
+    .view-tab:hover { color: var(--vscode-foreground); }
     .view-tab.active {
       color: var(--vscode-foreground);
       border-bottom-color: var(--vscode-button-background);
     }
     .view-tab .icon { font-size: 14px; }
+    
+    /* 撤销重做按钮 */
+    .history-buttons {
+      margin-left: auto;
+      display: flex;
+      gap: 4px;
+    }
+    .history-btn {
+      padding: 4px 8px;
+      background: transparent;
+      color: var(--vscode-foreground);
+      border: 1px solid var(--vscode-button-border);
+      border-radius: 3px;
+      cursor: pointer;
+      font-size: 12px;
+      opacity: 0.7;
+    }
+    .history-btn:hover:not(:disabled) {
+      opacity: 1;
+      background: var(--vscode-toolbar-hoverBackground);
+    }
+    .history-btn:disabled {
+      opacity: 0.3;
+      cursor: not-allowed;
+    }
     
     /* 主内容区域 */
     .main-content {
@@ -418,9 +336,7 @@ export class WorkflowEditorProvider implements vscode.CustomEditorProvider<Workf
       justify-content: center;
       font-size: 10px;
     }
-    .toolbar-btn:hover {
-      background: var(--vscode-toolbar-hoverBackground);
-    }
+    .toolbar-btn:hover { background: var(--vscode-toolbar-hoverBackground); }
     .toolbar-btn .icon { font-size: 18px; margin-bottom: 2px; }
     
     /* 画布区域 */
@@ -568,13 +484,8 @@ export class WorkflowEditorProvider implements vscode.CustomEditorProvider<Workf
       border-radius: 4px;
       cursor: pointer;
       font-size: 12px;
-      display: flex;
-      align-items: center;
-      gap: 4px;
     }
-    .top-bar button:hover {
-      background: var(--vscode-button-hoverBackground);
-    }
+    .top-bar button:hover { background: var(--vscode-button-hoverBackground); }
     .zoom-display {
       padding: 6px 12px;
       background: var(--vscode-editorWidget-background);
@@ -599,9 +510,7 @@ export class WorkflowEditorProvider implements vscode.CustomEditorProvider<Workf
       padding-bottom: 10px;
       border-bottom: 1px solid var(--vscode-sideBar-border);
     }
-    .property-group {
-      margin-bottom: 15px;
-    }
+    .property-group { margin-bottom: 15px; }
     .property-group label {
       display: block;
       font-size: 11px;
@@ -647,7 +556,6 @@ export class WorkflowEditorProvider implements vscode.CustomEditorProvider<Workf
       color: var(--vscode-descriptionForeground);
     }
     
-    /* 提示信息 */
     .hint {
       position: absolute;
       bottom: 10px;
@@ -685,9 +593,7 @@ export class WorkflowEditorProvider implements vscode.CustomEditorProvider<Workf
       cursor: pointer;
       font-size: 12px;
     }
-    .json-toolbar button:hover {
-      background: var(--vscode-button-hoverBackground);
-    }
+    .json-toolbar button:hover { background: var(--vscode-button-hoverBackground); }
     .json-toolbar button.secondary {
       background: var(--vscode-button-secondaryBackground);
       color: var(--vscode-button-secondaryForeground);
@@ -739,43 +645,23 @@ export class WorkflowEditorProvider implements vscode.CustomEditorProvider<Workf
         <span class="icon">{ }</span>
         <span>JSON</span>
       </div>
+      <div class="history-buttons">
+        <button class="history-btn" id="btn-undo" title="撤销 (Ctrl+Z)">↶ 撤销</button>
+        <button class="history-btn" id="btn-redo" title="重做 (Ctrl+Y)">↷ 重做</button>
+      </div>
     </div>
     
     <!-- 可视化视图 -->
     <div class="main-content" id="visual-view">
       <div class="toolbar">
-        <button class="toolbar-btn" data-type="start" title="开始节点">
-          <span class="icon">▶</span>
-          <span>开始</span>
-        </button>
-        <button class="toolbar-btn" data-type="end" title="结束节点">
-          <span class="icon">⏹</span>
-          <span>结束</span>
-        </button>
-        <button class="toolbar-btn" data-type="code" title="代码节点">
-          <span class="icon">&lt;/&gt;</span>
-          <span>代码</span>
-        </button>
-        <button class="toolbar-btn" data-type="llm" title="LLM 节点">
-          <span class="icon">🤖</span>
-          <span>LLM</span>
-        </button>
-        <button class="toolbar-btn" data-type="switch" title="条件分支">
-          <span class="icon">⑂</span>
-          <span>分支</span>
-        </button>
-        <button class="toolbar-btn" data-type="parallel" title="并行执行">
-          <span class="icon">∥</span>
-          <span>并行</span>
-        </button>
-        <button class="toolbar-btn" data-type="http" title="HTTP 请求">
-          <span class="icon">🌐</span>
-          <span>HTTP</span>
-        </button>
-        <button class="toolbar-btn" data-type="transform" title="数据转换">
-          <span class="icon">⟲</span>
-          <span>转换</span>
-        </button>
+        <button class="toolbar-btn" data-type="start" title="开始节点"><span class="icon">▶</span><span>开始</span></button>
+        <button class="toolbar-btn" data-type="end" title="结束节点"><span class="icon">⏹</span><span>结束</span></button>
+        <button class="toolbar-btn" data-type="code" title="代码节点"><span class="icon">&lt;/&gt;</span><span>代码</span></button>
+        <button class="toolbar-btn" data-type="llm" title="LLM 节点"><span class="icon">🤖</span><span>LLM</span></button>
+        <button class="toolbar-btn" data-type="switch" title="条件分支"><span class="icon">⑂</span><span>分支</span></button>
+        <button class="toolbar-btn" data-type="parallel" title="并行执行"><span class="icon">∥</span><span>并行</span></button>
+        <button class="toolbar-btn" data-type="http" title="HTTP 请求"><span class="icon">🌐</span><span>HTTP</span></button>
+        <button class="toolbar-btn" data-type="transform" title="数据转换"><span class="icon">⟲</span><span>转换</span></button>
       </div>
       
       <div class="canvas-container" id="canvas-container">
@@ -790,23 +676,17 @@ export class WorkflowEditorProvider implements vscode.CustomEditorProvider<Workf
         
         <div id="canvas">
           <div class="canvas-bg"></div>
-          <svg id="edges-svg">
-            <path id="temp-edge" style="display: none;"/>
-          </svg>
+          <svg id="edges-svg"><path id="temp-edge" style="display: none;"/></svg>
           <div class="nodes-container" id="nodes-container"></div>
         </div>
         
-        <div class="hint">
-          中键拖动画布 | 滚轮缩放 | Delete 删除节点
-        </div>
+        <div class="hint">中键拖动画布 | 滚轮缩放 | Delete 删除节点 | Ctrl+Z 撤销 | Ctrl+Y 重做</div>
       </div>
       
       <div class="properties-panel">
         <h3>属性</h3>
         <div id="properties-content">
-          <p style="color: var(--vscode-descriptionForeground); font-size: 12px;">
-            选择一个节点查看其属性
-          </p>
+          <p style="color: var(--vscode-descriptionForeground); font-size: 12px;">选择一个节点查看其属性</p>
         </div>
       </div>
     </div>
@@ -834,18 +714,84 @@ export class WorkflowEditorProvider implements vscode.CustomEditorProvider<Workf
   <script nonce="${nonce}">
     const vscode = acquireVsCodeApi();
     
-    // 状态
+    // ========== 历史记录管理 ==========
+    class HistoryManager {
+      constructor(maxSize = 50) {
+        this.undoStack = [];
+        this.redoStack = [];
+        this.maxSize = maxSize;
+        this.isRecording = true;
+      }
+      
+      push(state, description = '') {
+        if (!this.isRecording) return;
+        
+        // 深拷贝状态
+        const snapshot = JSON.parse(JSON.stringify(state));
+        this.undoStack.push({ state: snapshot, description, timestamp: Date.now() });
+        
+        // 限制大小
+        if (this.undoStack.length > this.maxSize) {
+          this.undoStack.shift();
+        }
+        
+        // 清空重做栈
+        this.redoStack = [];
+        this.updateButtons();
+      }
+      
+      undo() {
+        if (this.undoStack.length <= 1) return null;
+        
+        // 当前状态保存到重做栈
+        const current = this.undoStack.pop();
+        this.redoStack.push(current);
+        
+        // 返回上一个状态
+        const previous = this.undoStack[this.undoStack.length - 1];
+        this.updateButtons();
+        return JSON.parse(JSON.stringify(previous.state));
+      }
+      
+      redo() {
+        if (this.redoStack.length === 0) return null;
+        
+        const next = this.redoStack.pop();
+        this.undoStack.push(next);
+        this.updateButtons();
+        return JSON.parse(JSON.stringify(next.state));
+      }
+      
+      canUndo() { return this.undoStack.length > 1; }
+      canRedo() { return this.redoStack.length > 0; }
+      
+      pause() { this.isRecording = false; }
+      resume() { this.isRecording = true; }
+      
+      updateButtons() {
+        document.getElementById('btn-undo').disabled = !this.canUndo();
+        document.getElementById('btn-redo').disabled = !this.canRedo();
+      }
+      
+      getCurrentState() {
+        if (this.undoStack.length === 0) return null;
+        return JSON.parse(JSON.stringify(this.undoStack[this.undoStack.length - 1].state));
+      }
+    }
+    
+    // ========== 全局状态 ==========
     let workflow = null;
     let nodeConfigs = {};
     let selectedNode = null;
     let currentView = 'visual';
+    let history = new HistoryManager(50);
+    
     let scale = 1;
     let offset = { x: 0, y: 0 };
     const MIN_SCALE = 0.1;
     const MAX_SCALE = 3;
     const SCALE_STEP = 0.1;
     
-    // 拖拽状态
     let isPanning = false;
     let panStart = { x: 0, y: 0 };
     let isDraggingNode = false;
@@ -867,13 +813,19 @@ export class WorkflowEditorProvider implements vscode.CustomEditorProvider<Workf
     const jsonLines = document.getElementById('json-lines');
     const jsonSize = document.getElementById('json-size');
     
-    // 初始化
+    // ========== 初始化 ==========
     window.addEventListener('message', event => {
       const message = event.data;
       switch (message.type) {
         case 'init':
           workflow = message.workflow;
           nodeConfigs = message.nodeConfigs || {};
+          
+          // 初始化历史记录
+          history.pause();
+          history.push(workflow, '初始状态');
+          history.resume();
+          
           render();
           fitToScreen();
           updateJsonEditor();
@@ -888,8 +840,9 @@ export class WorkflowEditorProvider implements vscode.CustomEditorProvider<Workf
               nodeConfigs[message.node.id] = message.config;
             }
             render();
-            selectNode(message.node);
+            selectNode(workflow.nodes[workflow.nodes.length - 1]);
             updateJsonEditor();
+            pushHistory('添加节点: ' + message.node.metadata.name);
           }
           break;
         case 'nodeRemoved':
@@ -899,21 +852,37 @@ export class WorkflowEditorProvider implements vscode.CustomEditorProvider<Workf
     
     vscode.postMessage({ type: 'ready' });
     
-    // ========== 视图切换 ==========
+    // ========== 历史记录操作 ==========
+    function pushHistory(description) {
+      history.push(workflow, description);
+      updateJsonEditor();
+    }
     
+    function applyHistoryState(state) {
+      workflow = state;
+      render();
+      updateJsonEditor();
+      selectNode(null);
+    }
+    
+    document.getElementById('btn-undo').addEventListener('click', () => {
+      const state = history.undo();
+      if (state) applyHistoryState(state);
+    });
+    
+    document.getElementById('btn-redo').addEventListener('click', () => {
+      const state = history.redo();
+      if (state) applyHistoryState(state);
+    });
+    
+    // ========== 视图切换 ==========
     document.querySelectorAll('.view-tab').forEach(tab => {
-      tab.addEventListener('click', () => {
-        const view = tab.dataset.view;
-        switchView(view);
-      });
+      tab.addEventListener('click', () => switchView(tab.dataset.view));
     });
     
     function switchView(view) {
       currentView = view;
-      
-      document.querySelectorAll('.view-tab').forEach(t => {
-        t.classList.toggle('active', t.dataset.view === view);
-      });
+      document.querySelectorAll('.view-tab').forEach(t => t.classList.toggle('active', t.dataset.view === view));
       
       if (view === 'visual') {
         visualView.classList.remove('hidden');
@@ -926,7 +895,6 @@ export class WorkflowEditorProvider implements vscode.CustomEditorProvider<Workf
     }
     
     // ========== JSON 编辑器 ==========
-    
     function updateJsonEditor() {
       if (!workflow) return;
       jsonEditor.value = JSON.stringify(workflow, null, 2);
@@ -935,8 +903,7 @@ export class WorkflowEditorProvider implements vscode.CustomEditorProvider<Workf
     
     function updateJsonStatus() {
       const text = jsonEditor.value;
-      const lines = text.split('\\n').length;
-      jsonLines.textContent = lines + ' 行';
+      jsonLines.textContent = text.split('\\n').length + ' 行';
       jsonSize.textContent = text.length + ' 字符';
     }
     
@@ -982,30 +949,23 @@ export class WorkflowEditorProvider implements vscode.CustomEditorProvider<Workf
     });
     
     document.getElementById('btn-copy').addEventListener('click', async () => {
-      try {
-        await navigator.clipboard.writeText(jsonEditor.value);
-        // 可以添加提示
-      } catch (e) {
-        console.error('Copy failed:', e);
-      }
+      await navigator.clipboard.writeText(jsonEditor.value);
     });
     
     document.getElementById('btn-apply-json').addEventListener('click', () => {
       const parsed = validateJson();
       if (parsed) {
         workflow = parsed;
+        pushHistory('从 JSON 应用更改');
         render();
         fitToScreen();
         switchView('visual');
       }
     });
     
-    document.getElementById('btn-reset-json').addEventListener('click', () => {
-      updateJsonEditor();
-    });
+    document.getElementById('btn-reset-json').addEventListener('click', updateJsonEditor);
     
     // ========== 画布变换 ==========
-    
     function updateTransform() {
       canvas.style.transform = \`translate(\${offset.x}px, \${offset.y}px) scale(\${scale})\`;
       zoomDisplay.textContent = Math.round(scale * 100) + '%';
@@ -1022,21 +982,17 @@ export class WorkflowEditorProvider implements vscode.CustomEditorProvider<Workf
     function setScale(newScale, centerX, centerY) {
       const oldScale = scale;
       scale = Math.max(MIN_SCALE, Math.min(MAX_SCALE, newScale));
-      
       if (centerX !== undefined && centerY !== undefined) {
         offset.x = centerX - (centerX - offset.x) * (scale / oldScale);
         offset.y = centerY - (centerY - offset.y) * (scale / oldScale);
       }
-      
       updateTransform();
     }
     
     function fitToScreen() {
       if (!workflow || workflow.nodes.length === 0) return;
-      
       const rect = canvasContainer.getBoundingClientRect();
       const padding = 50;
-      
       let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
       workflow.nodes.forEach(node => {
         minX = Math.min(minX, node.position.x);
@@ -1044,23 +1000,18 @@ export class WorkflowEditorProvider implements vscode.CustomEditorProvider<Workf
         maxX = Math.max(maxX, node.position.x + 150);
         maxY = Math.max(maxY, node.position.y + 80);
       });
-      
       const contentWidth = maxX - minX;
       const contentHeight = maxY - minY;
       const availableWidth = rect.width - padding * 2;
       const availableHeight = rect.height - padding * 2;
-      
       scale = Math.min(availableWidth / contentWidth, availableHeight / contentHeight, 1);
       scale = Math.max(MIN_SCALE, Math.min(MAX_SCALE, scale));
-      
       offset.x = (availableWidth - contentWidth * scale) / 2 - minX * scale + padding;
       offset.y = (availableHeight - contentHeight * scale) / 2 - minY * scale + padding;
-      
       updateTransform();
     }
     
     // ========== 鼠标事件 ==========
-    
     canvasContainer.addEventListener('mousedown', e => {
       if (e.button === 1) {
         isPanning = true;
@@ -1094,7 +1045,6 @@ export class WorkflowEditorProvider implements vscode.CustomEditorProvider<Workf
           const startX = (rect.right - canvasContainer.getBoundingClientRect().left - offset.x) / scale;
           const startY = (rect.top + rect.height / 2 - canvasContainer.getBoundingClientRect().top - offset.y) / scale;
           const canvasPos = screenToCanvas(e.clientX, e.clientY);
-          
           tempEdge.setAttribute('d', \`M \${startX} \${startY} L \${canvasPos.x} \${canvasPos.y}\`);
           tempEdge.style.display = 'block';
         }
@@ -1111,6 +1061,8 @@ export class WorkflowEditorProvider implements vscode.CustomEditorProvider<Workf
         isDraggingNode = false;
         if (selectedNode) {
           document.querySelector(\`.node[data-id="\${selectedNode.id}"]\`)?.classList.remove('dragging');
+          // 记录位置变化到历史
+          pushHistory('移动节点: ' + selectedNode.metadata.name);
         }
       }
       
@@ -1135,10 +1087,10 @@ export class WorkflowEditorProvider implements vscode.CustomEditorProvider<Workf
               };
               workflow.edges.push(edge);
               renderEdges();
+              pushHistory('添加连线');
             }
           }
         }
-        
         connectingPort = null;
       }
     });
@@ -1146,30 +1098,36 @@ export class WorkflowEditorProvider implements vscode.CustomEditorProvider<Workf
     canvasContainer.addEventListener('wheel', e => {
       e.preventDefault();
       const rect = canvasContainer.getBoundingClientRect();
-      const centerX = e.clientX - rect.left;
-      const centerY = e.clientY - rect.top;
-      
-      const delta = e.deltaY > 0 ? -SCALE_STEP : SCALE_STEP;
-      setScale(scale + delta, centerX, centerY);
+      setScale(scale + (e.deltaY > 0 ? -SCALE_STEP : SCALE_STEP), e.clientX - rect.left, e.clientY - rect.top);
     });
     
     // ========== 键盘事件 ==========
-    
     document.addEventListener('keydown', e => {
-      if (e.key === 'Delete' || e.key === 'Backspace') {
-        if (selectedNode && document.activeElement.tagName !== 'INPUT' && document.activeElement.tagName !== 'TEXTAREA') {
-          deleteNode(selectedNode.id);
-        }
+      // 撤销 Ctrl+Z
+      if (e.ctrlKey && e.key === 'z' && !e.shiftKey) {
+        e.preventDefault();
+        const state = history.undo();
+        if (state) applyHistoryState(state);
+      }
+      // 重做 Ctrl+Y 或 Ctrl+Shift+Z
+      if ((e.ctrlKey && e.key === 'y') || (e.ctrlKey && e.shiftKey && e.key === 'z')) {
+        e.preventDefault();
+        const state = history.redo();
+        if (state) applyHistoryState(state);
+      }
+      // 删除节点
+      if ((e.key === 'Delete' || e.key === 'Backspace') && 
+          selectedNode && 
+          document.activeElement.tagName !== 'INPUT' && 
+          document.activeElement.tagName !== 'TEXTAREA') {
+        e.preventDefault();
+        deleteNode(selectedNode.id);
       }
     });
     
     // ========== 工具栏 ==========
-    
     document.querySelectorAll('.toolbar-btn').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const type = btn.dataset.type;
-        addNode(type);
-      });
+      btn.addEventListener('click', () => addNode(btn.dataset.type));
     });
     
     document.getElementById('btn-zoom-in').addEventListener('click', () => {
@@ -1193,7 +1151,6 @@ export class WorkflowEditorProvider implements vscode.CustomEditorProvider<Workf
     });
     
     // ========== 节点操作 ==========
-    
     function addNode(type) {
       const id = 'node_' + Date.now();
       const canvasCenter = screenToCanvas(
@@ -1204,14 +1161,8 @@ export class WorkflowEditorProvider implements vscode.CustomEditorProvider<Workf
       const node = {
         id,
         type,
-        position: { 
-          x: canvasCenter.x - 75 + Math.random() * 50, 
-          y: canvasCenter.y - 40 + Math.random() * 50 
-        },
-        metadata: {
-          name: getNodeName(type),
-          description: ''
-        },
+        position: { x: canvasCenter.x - 75, y: canvasCenter.y - 40 },
+        metadata: { name: getNodeName(type), description: '' },
         data: {}
       };
       
@@ -1219,6 +1170,9 @@ export class WorkflowEditorProvider implements vscode.CustomEditorProvider<Workf
     }
     
     function deleteNode(nodeId) {
+      const node = workflow.nodes.find(n => n.id === nodeId);
+      const nodeName = node?.metadata?.name || nodeId;
+      
       vscode.postMessage({ type: 'removeNode', nodeId });
       workflow.nodes = workflow.nodes.filter(n => n.id !== nodeId);
       workflow.edges = workflow.edges.filter(e => e.source.nodeId !== nodeId && e.target.nodeId !== nodeId);
@@ -1227,6 +1181,7 @@ export class WorkflowEditorProvider implements vscode.CustomEditorProvider<Workf
       render();
       showEmptyProperties();
       updateJsonEditor();
+      pushHistory('删除节点: ' + nodeName);
     }
     
     function getNodeName(type) {
@@ -1246,7 +1201,6 @@ export class WorkflowEditorProvider implements vscode.CustomEditorProvider<Workf
     }
     
     // ========== 渲染 ==========
-    
     function render() {
       renderNodes();
       renderEdges();
@@ -1261,14 +1215,11 @@ export class WorkflowEditorProvider implements vscode.CustomEditorProvider<Workf
             <span class="node-type-icon">\${getNodeIcon(node.type)}</span>
             <span>\${node.metadata.name}</span>
           </div>
-          <div class="node-body">
-            \${node.metadata.description || '双击编辑'}
-          </div>
+          <div class="node-body">\${node.metadata.description || '双击编辑'}</div>
           \${node.type !== 'start' ? '<div class="port port-input" data-port="input"></div>' : ''}
           \${node.type !== 'end' ? '<div class="port port-output" data-port="output"></div>' : ''}
         </div>
       \`).join('');
-      
       attachNodeEvents();
     }
     
@@ -1277,18 +1228,12 @@ export class WorkflowEditorProvider implements vscode.CustomEditorProvider<Workf
         const sourceNode = workflow.nodes.find(n => n.id === edge.source.nodeId);
         const targetNode = workflow.nodes.find(n => n.id === edge.target.nodeId);
         if (!sourceNode || !targetNode) return '';
-        
         const x1 = sourceNode.position.x + 150;
         const y1 = sourceNode.position.y + 40;
         const x2 = targetNode.position.x;
         const y2 = targetNode.position.y + 40;
-        
-        const cx1 = x1 + Math.abs(x2 - x1) * 0.4;
-        const cx2 = x2 - Math.abs(x2 - x1) * 0.4;
-        
-        return \`<path d="M \${x1} \${y1} C \${cx1} \${y1}, \${cx2} \${y2}, \${x2} \${y2}" stroke-linecap="round"/>\`;
+        return \`<path d="M \${x1} \${y1} C \${x1 + 50} \${y1}, \${x2 - 50} \${y2}, \${x2} \${y2}" stroke-linecap="round"/>\`;
       }).join('');
-      
       edgesSvg.innerHTML = paths + '<path id="temp-edge" style="display: none;"/>';
     }
     
@@ -1298,10 +1243,8 @@ export class WorkflowEditorProvider implements vscode.CustomEditorProvider<Workf
         
         el.addEventListener('mousedown', e => {
           if (e.target.classList.contains('port') || e.button !== 0) return;
-          
           const node = workflow.nodes.find(n => n.id === nodeId);
           selectNode(node);
-          
           isDraggingNode = true;
           const canvasPos = screenToCanvas(e.clientX, e.clientY);
           dragStart = canvasPos;
@@ -1309,18 +1252,12 @@ export class WorkflowEditorProvider implements vscode.CustomEditorProvider<Workf
           el.classList.add('dragging');
           e.stopPropagation();
         });
-        
-        el.addEventListener('dblclick', e => {
-          if (e.target.classList.contains('port')) return;
-          vscode.postMessage({ type: 'editNode', nodeId });
-        });
       });
       
       document.querySelectorAll('.port-output').forEach(port => {
         port.addEventListener('mousedown', e => {
           const nodeEl = port.closest('.node');
-          const nodeId = nodeEl.dataset.id;
-          connectingPort = { nodeId, portType: 'output' };
+          connectingPort = { nodeId: nodeEl.dataset.id, portType: 'output' };
           e.stopPropagation();
           e.preventDefault();
         });
@@ -1328,7 +1265,6 @@ export class WorkflowEditorProvider implements vscode.CustomEditorProvider<Workf
     }
     
     // ========== 选择与属性 ==========
-    
     function selectNode(node) {
       document.querySelectorAll('.node').forEach(el => el.classList.remove('selected'));
       selectedNode = node;
@@ -1355,8 +1291,6 @@ export class WorkflowEditorProvider implements vscode.CustomEditorProvider<Workf
                 <select id="config-triggerType">
                   <option value="manual" \${config.triggerType === 'manual' ? 'selected' : ''}>手动触发</option>
                   <option value="api" \${config.triggerType === 'api' ? 'selected' : ''}>API 调用</option>
-                  <option value="schedule" \${config.triggerType === 'schedule' ? 'selected' : ''}>定时触发</option>
-                  <option value="webhook" \${config.triggerType === 'webhook' ? 'selected' : ''}>Webhook</option>
                 </select>
               </div>
             </div>
@@ -1374,10 +1308,6 @@ export class WorkflowEditorProvider implements vscode.CustomEditorProvider<Workf
                   <option value="python" \${config.language === 'python' ? 'selected' : ''}>Python</option>
                 </select>
               </div>
-              <div class="property-group">
-                <label>超时 (ms)</label>
-                <input type="number" id="config-timeout" value="\${config.timeout || 30000}">
-              </div>
             </div>
           \`;
           break;
@@ -1386,66 +1316,12 @@ export class WorkflowEditorProvider implements vscode.CustomEditorProvider<Workf
             <div class="config-section">
               <h4>LLM 配置</h4>
               <div class="property-group">
-                <label>Provider</label>
-                <select id="config-provider">
-                  <option value="openai" \${config.model?.provider === 'openai' ? 'selected' : ''}>OpenAI</option>
-                  <option value="anthropic" \${config.model?.provider === 'anthropic' ? 'selected' : ''}>Anthropic</option>
-                  <option value="azure" \${config.model?.provider === 'azure' ? 'selected' : ''}>Azure</option>
-                </select>
-              </div>
-              <div class="property-group">
                 <label>模型</label>
                 <input type="text" id="config-model" value="\${config.model?.model || 'gpt-4'}">
               </div>
               <div class="property-group">
                 <label>Temperature</label>
                 <input type="number" id="config-temperature" value="\${config.temperature || 0.7}" step="0.1" min="0" max="2">
-              </div>
-              <div class="property-group">
-                <label>系统提示词</label>
-                <textarea id="config-systemPrompt" rows="3">\${config.systemPrompt || ''}</textarea>
-              </div>
-            </div>
-          \`;
-          break;
-        case 'http':
-          configHtml = \`
-            <div class="config-section">
-              <h4>HTTP 配置</h4>
-              <div class="property-group">
-                <label>URL</label>
-                <input type="text" id="config-url" value="\${config.url || ''}">
-              </div>
-              <div class="property-group">
-                <label>方法</label>
-                <select id="config-method">
-                  <option value="GET" \${config.method === 'GET' ? 'selected' : ''}>GET</option>
-                  <option value="POST" \${config.method === 'POST' ? 'selected' : ''}>POST</option>
-                  <option value="PUT" \${config.method === 'PUT' ? 'selected' : ''}>PUT</option>
-                  <option value="DELETE" \${config.method === 'DELETE' ? 'selected' : ''}>DELETE</option>
-                </select>
-              </div>
-              <div class="property-group">
-                <label>超时 (ms)</label>
-                <input type="number" id="config-timeout" value="\${config.timeout || 30000}">
-              </div>
-            </div>
-          \`;
-          break;
-        case 'switch':
-          configHtml = \`
-            <div class="config-section">
-              <h4>分支配置</h4>
-              <div class="property-group">
-                <label>评估模式</label>
-                <select id="config-evaluationMode">
-                  <option value="first-match" \${config.evaluationMode === 'first-match' ? 'selected' : ''}>首个匹配</option>
-                  <option value="all-match" \${config.evaluationMode === 'all-match' ? 'selected' : ''}>全部匹配</option>
-                </select>
-              </div>
-              <div class="property-group">
-                <label>分支数量</label>
-                <input type="number" value="\${(config.branches || []).length}" disabled>
               </div>
             </div>
           \`;
@@ -1462,10 +1338,6 @@ export class WorkflowEditorProvider implements vscode.CustomEditorProvider<Workf
           <input type="text" id="prop-name" value="\${node.metadata.name}">
         </div>
         <div class="property-group">
-          <label>类型</label>
-          <input type="text" value="\${node.type}" disabled>
-        </div>
-        <div class="property-group">
           <label>描述</label>
           <textarea id="prop-desc" rows="2">\${node.metadata.description || ''}</textarea>
         </div>
@@ -1480,71 +1352,42 @@ export class WorkflowEditorProvider implements vscode.CustomEditorProvider<Workf
         <button class="btn-danger" id="btn-delete-node">🗑️ 删除节点</button>
       \`;
       
-      document.getElementById('prop-name').addEventListener('change', e => {
+      // 属性修改事件 - 实时更新 JSON
+      document.getElementById('prop-name').addEventListener('input', e => {
         node.metadata.name = e.target.value;
         renderNodes();
         updateJsonEditor();
       });
       
-      document.getElementById('prop-desc').addEventListener('change', e => {
+      document.getElementById('prop-name').addEventListener('change', e => {
+        pushHistory('修改节点名称');
+      });
+      
+      document.getElementById('prop-desc').addEventListener('input', e => {
         node.metadata.description = e.target.value;
         renderNodes();
+        updateJsonEditor();
+      });
+      
+      document.getElementById('prop-desc').addEventListener('change', e => {
+        pushHistory('修改节点描述');
       });
       
       document.getElementById('prop-x').addEventListener('change', e => {
         node.position.x = parseInt(e.target.value) || 0;
         render();
+        updateJsonEditor();
+        pushHistory('修改节点位置');
       });
       
       document.getElementById('prop-y').addEventListener('change', e => {
         node.position.y = parseInt(e.target.value) || 0;
         render();
+        updateJsonEditor();
+        pushHistory('修改节点位置');
       });
       
-      const configInputs = panel.querySelectorAll('[id^="config-"]');
-      configInputs.forEach(input => {
-        input.addEventListener('change', () => {
-          updateNodeConfig(node.id);
-        });
-      });
-      
-      document.getElementById('btn-delete-node').addEventListener('click', () => {
-        deleteNode(node.id);
-      });
-    }
-    
-    function updateNodeConfig(nodeId) {
-      const config = nodeConfigs[nodeId] || {};
-      const node = workflow.nodes.find(n => n.id === nodeId);
-      if (!node) return;
-      
-      switch (node.type) {
-        case 'start':
-          config.triggerType = document.getElementById('config-triggerType')?.value || 'manual';
-          break;
-        case 'code':
-          config.language = document.getElementById('config-language')?.value || 'javascript';
-          config.timeout = parseInt(document.getElementById('config-timeout')?.value) || 30000;
-          break;
-        case 'llm':
-          config.model = config.model || {};
-          config.model.provider = document.getElementById('config-provider')?.value || 'openai';
-          config.model.model = document.getElementById('config-model')?.value || 'gpt-4';
-          config.temperature = parseFloat(document.getElementById('config-temperature')?.value) || 0.7;
-          config.systemPrompt = document.getElementById('config-systemPrompt')?.value || '';
-          break;
-        case 'http':
-          config.url = document.getElementById('config-url')?.value || '';
-          config.method = document.getElementById('config-method')?.value || 'GET';
-          config.timeout = parseInt(document.getElementById('config-timeout')?.value) || 30000;
-          break;
-        case 'switch':
-          config.evaluationMode = document.getElementById('config-evaluationMode')?.value || 'first-match';
-          break;
-      }
-      
-      nodeConfigs[nodeId] = config;
-      vscode.postMessage({ type: 'updateNodeConfig', nodeId, config });
+      document.getElementById('btn-delete-node').addEventListener('click', () => deleteNode(node.id));
     }
     
     function showEmptyProperties() {
