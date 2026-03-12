@@ -203,12 +203,33 @@ export class WorkflowEditorProvider implements vscode.CustomEditorProvider<Workf
     await fs.promises.writeFile(filePath, '', 'utf-8');
   }
 
-  private handleRemoveNode(document: WorkflowDocument, nodeId: string, webview: vscode.Webview): void {
+  private async handleRemoveNode(document: WorkflowDocument, nodeId: string, webview: vscode.Webview): Promise<void> {
+    const fs = await import('fs');
+    
+    // 找到要删除的节点
+    const node = document.workflow.nodes.find(n => n.id === nodeId);
+    
+    // 删除配置文件
+    if (node) {
+      const config = document.nodeConfigs.get(nodeId);
+      if (config) {
+        const ext = getConfigExtension(node.type as NodeType, config);
+        const fileName = `${nodeId}_${node.type}${ext}`;
+        const filePath = path.join(document.workflowDir, 'nodes', fileName);
+        
+        if (fs.existsSync(filePath)) {
+          await fs.promises.unlink(filePath);
+        }
+      }
+    }
+    
+    // 更新内存状态
     document.workflow.nodes = document.workflow.nodes.filter(n => n.id !== nodeId);
     document.workflow.edges = document.workflow.edges.filter(
       e => e.source.nodeId !== nodeId && e.target.nodeId !== nodeId
     );
     document.nodeConfigs.delete(nodeId);
+    
     webview.postMessage({ type: 'nodeRemoved', nodeId });
   }
 
@@ -896,13 +917,12 @@ export class WorkflowEditorProvider implements vscode.CustomEditorProvider<Workf
           nodeConfigs = message.nodeConfigs || {};
           
           // 初始化历史记录
-          history.pause();
           history.push(workflow, nodeConfigs, '初始状态');
-          history.resume();
           
           render();
           fitToScreen();
           updateJsonEditor();
+          history.updateButtons();
           break;
         case 'saved':
           console.log('Workflow saved');
