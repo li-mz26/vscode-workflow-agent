@@ -27,6 +27,27 @@ export interface NodeMetadata {
   color?: string;
 }
 
+/** Switch 分支 */
+export interface SwitchBranch {
+  id: string;
+  name: string;
+  condition: string;  // 表达式，如 "data.score > 80"
+  priority?: number;
+}
+
+/** 并行分支 */
+export interface ParallelBranch {
+  id: string;
+  name: string;
+}
+
+/** 节点详细信息 - 用于可视化显示 */
+export interface NodeDetail {
+  branches?: SwitchBranch[];      // switch 节点的分支列表
+  parallelBranches?: ParallelBranch[];  // parallel 节点的分支列表
+  defaultBranch?: string;         // switch 默认分支 ID
+}
+
 // ============ 节点类型定义 ============
 
 /** 节点类型枚举 */
@@ -64,25 +85,11 @@ export interface EndNodeConfig {
   selectedOutputs?: string[];
 }
 
-/** Switch 分支条件 */
-export interface SwitchBranch {
-  id: string;
-  name: string;
-  condition: string;  // 表达式，如 "data.score > 80"
-  priority?: number;
-}
-
 /** Switch 节点配置 */
 export interface SwitchNodeConfig {
   branches: SwitchBranch[];
   defaultBranch: string;
   evaluationMode: 'first-match' | 'all-match';
-}
-
-/** 并行分支配置 */
-export interface ParallelBranch {
-  id: string;
-  name: string;
 }
 
 /** 并行节点配置 */
@@ -145,6 +152,7 @@ export interface WorkflowNode {
   outputs?: IODefinition;
   metadata: NodeMetadata;
   data?: Record<string, any>;  // 运行时数据
+  detail?: NodeDetail;  // 节点详细信息（分支列表等）
 }
 
 // ============ 边定义 ============
@@ -161,7 +169,7 @@ export interface WorkflowEdge {
   source: PortRef;
   target: PortRef;
   label?: string;
-  condition?: string;  // 条件表达式（用于 switch 分支）
+  branchId?: string;  // switch 分支 ID，用于标识该边属于哪个分支
 }
 
 // ============ 工作流定义 ============
@@ -238,6 +246,7 @@ export interface ExecutionContext {
   nodeResults: Map<string, NodeExecutionResult>;
   startTime: number;
   status: WorkflowExecutionStatus;
+  branchDecisions: Map<string, string>;  // switch 节点 ID -> 匹配的分支 ID
 }
 
 /** 工作流执行结果 */

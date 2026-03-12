@@ -1,11 +1,8 @@
 {
   "branches": [
-    {
-      "id": "branch_1",
-      "name": "高分",
-      "condition": "data.avg_score >= 80"
-    }
+    { "id": "branch_high", "name": "高分", "condition": "data.avg_score >= 80" },
+    { "id": "branch_low", "name": "低分", "condition": "true" }
   ],
-  "defaultBranch": "default",
+  "defaultBranch": "branch_low",
   "evaluationMode": "first-match"
 }

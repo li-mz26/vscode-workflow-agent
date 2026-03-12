@@ -27,17 +27,24 @@
     {
       "id": "node_check_score",
       "type": "switch",
-      "position": { "x": 500, "y": 300 },
+      "position": { "x": 500, "y": 250 },
       "configRef": "nodes/node_check_score.json",
       "metadata": {
         "name": "分数判断",
         "description": "根据分数分支"
+      },
+      "detail": {
+        "branches": [
+          { "id": "branch_high", "name": "高分", "condition": "data.avg_score >= 80" },
+          { "id": "branch_low", "name": "低分", "condition": "true" }
+        ],
+        "defaultBranch": "branch_low"
       }
     },
     {
       "id": "node_process_high",
       "type": "code",
-      "position": { "x": 700, "y": 150 },
+      "position": { "x": 750, "y": 150 },
       "configRef": "nodes/node_process_high.py",
       "metadata": {
         "name": "高分处理",
@@ -47,7 +54,7 @@
     {
       "id": "node_process_low",
       "type": "code",
-      "position": { "x": 700, "y": 450 },
+      "position": { "x": 750, "y": 400 },
       "configRef": "nodes/node_process_low.py",
       "metadata": {
         "name": "低分处理",
@@ -55,19 +62,9 @@
       }
     },
     {
-      "id": "node_parallel_tasks",
-      "type": "parallel",
-      "position": { "x": 900, "y": 300 },
-      "configRef": "nodes/node_parallel_tasks.json",
-      "metadata": {
-        "name": "并行任务",
-        "description": "同时执行多个任务"
-      }
-    },
-    {
       "id": "node_summary",
       "type": "code",
-      "position": { "x": 1100, "y": 300 },
+      "position": { "x": 1000, "y": 300 },
       "configRef": "nodes/node_summary.py",
       "metadata": {
         "name": "汇总结果",
@@ -77,7 +74,7 @@
     {
       "id": "node_end",
       "type": "end",
-      "position": { "x": 1300, "y": 300 },
+      "position": { "x": 1250, "y": 300 },
       "configRef": "nodes/node_end.json",
       "metadata": {
         "name": "结束",
@@ -100,31 +97,26 @@
       "id": "edge_003",
       "source": { "nodeId": "node_check_score", "portId": "output" },
       "target": { "nodeId": "node_process_high", "portId": "input" },
-      "condition": "branch_1"
+      "branchId": "branch_high"
     },
     {
       "id": "edge_004",
       "source": { "nodeId": "node_check_score", "portId": "output" },
       "target": { "nodeId": "node_process_low", "portId": "input" },
-      "condition": "default"
+      "branchId": "branch_low"
     },
     {
       "id": "edge_005",
       "source": { "nodeId": "node_process_high", "portId": "output" },
-      "target": { "nodeId": "node_parallel_tasks", "portId": "input" }
+      "target": { "nodeId": "node_summary", "portId": "input" }
     },
     {
       "id": "edge_006",
       "source": { "nodeId": "node_process_low", "portId": "output" },
-      "target": { "nodeId": "node_parallel_tasks", "portId": "input" }
-    },
-    {
-      "id": "edge_007",
-      "source": { "nodeId": "node_parallel_tasks", "portId": "output" },
       "target": { "nodeId": "node_summary", "portId": "input" }
     },
     {
-      "id": "edge_008",
+      "id": "edge_007",
       "source": { "nodeId": "node_summary", "portId": "output" },
       "target": { "nodeId": "node_end", "portId": "input" }
     }
@@ -132,7 +124,7 @@
   "metadata": {
     "author": "demo",
     "createdAt": "2026-03-12T00:00:00.000Z",
-    "updatedAt": "2026-03-12T08:00:00.000Z",
-    "tags": ["demo", "example", "branch", "parallel"]
+    "updatedAt": "2026-03-12T09:00:00.000Z",
+    "tags": ["demo", "example", "branch"]
   }
 }

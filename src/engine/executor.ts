@@ -189,23 +189,94 @@ export class WorkflowEngine {
       variables: { ...initialInput },
       nodeResults: new Map(),
       startTime: Date.now(),
-      status: 'running'
+      status: 'running',
+      branchDecisions: new Map()  // 存储分支决策
     };
 
     this.emit({ type: 'workflow:start', workflowId: workflow.id, executionId });
 
     try {
-      // 拓扑排序
-      const sortedNodes = this.topologicalSort(workflow);
+      // 构建图结构
+      const nodeMap = new Map(workflow.nodes.map(n => [n.id, n]));
+      const outgoingEdges = new Map<string, WorkflowEdge[]>();
+      const incomingEdges = new Map<string, WorkflowEdge[]>();
+      
+      for (const node of workflow.nodes) {
+        outgoingEdges.set(node.id, []);
+        incomingEdges.set(node.id, []);
+      }
+      
+      for (const edge of workflow.edges || []) {
+        outgoingEdges.get(edge.source.nodeId)?.push(edge);
+        incomingEdges.get(edge.target.nodeId)?.push(edge);
+      }
 
-      // 执行节点
-      for (const node of sortedNodes) {
+      // 找到起始节点（入度为 0）
+      const startNodes = workflow.nodes.filter(n => 
+        (incomingEdges.get(n.id) || []).length === 0
+      );
+
+      // 执行节点（BFS）
+      const executed = new Set<string>();
+      const queue: string[] = startNodes.map(n => n.id);
+
+      while (queue.length > 0) {
+        const nodeId = queue.shift()!;
+        
+        if (executed.has(nodeId)) continue;
+        
+        const node = nodeMap.get(nodeId);
+        if (!node) continue;
+
+        // 检查是否应该执行该节点（分支决策）
+        if (!this.shouldExecuteNode(nodeId, workflow, context)) {
+          executed.add(nodeId);
+          // 标记为跳过
+          context.nodeResults.set(nodeId, {
+            nodeId,
+            status: 'skipped',
+            startTime: Date.now(),
+            endTime: Date.now(),
+            duration: 0
+          });
+          continue;
+        }
+
+        // 执行节点
         const result = await this.executeNode(node, nodeConfigs, context);
-        context.nodeResults.set(node.id, result);
+        context.nodeResults.set(nodeId, result);
+        executed.add(nodeId);
 
         if (result.status === 'failed') {
           context.status = 'failed';
           break;
+        }
+
+        // 更新变量
+        if (result.output) {
+          context.variables = { ...context.variables, ...result.output };
+        }
+
+        // 如果是 switch 节点，记录分支决策
+        if (node.type === 'switch' && result.output?.branch) {
+          context.branchDecisions.set(nodeId, result.output.branch);
+        }
+
+        // 添加后续节点到队列
+        const nextEdges = outgoingEdges.get(nodeId) || [];
+        for (const edge of nextEdges) {
+          // 如果边有 branchId，检查是否匹配当前分支决策
+          if (edge.branchId) {
+            const decision = context.branchDecisions.get(nodeId);
+            if (decision && edge.branchId !== decision) {
+              continue;  // 跳过不匹配的分支
+            }
+          }
+          
+          const targetId = edge.target.nodeId;
+          if (!executed.has(targetId)) {
+            queue.push(targetId);
+          }
         }
       }
 
@@ -219,6 +290,44 @@ export class WorkflowEngine {
     const result = this.createResult(context);
     this.emit({ type: 'workflow:end', result });
     return result;
+  }
+
+  /**
+   * 检查节点是否应该执行
+   */
+  private shouldExecuteNode(
+    nodeId: string, 
+    workflow: Workflow, 
+    context: ExecutionContext
+  ): boolean {
+    // 找到所有指向该节点的边
+    const incomingEdges = workflow.edges.filter(e => e.target.nodeId === nodeId);
+    
+    // 如果没有入边，应该执行（起始节点）
+    if (incomingEdges.length === 0) return true;
+    
+    // 检查是否有来自已执行节点的有效路径
+    for (const edge of incomingEdges) {
+      const sourceResult = context.nodeResults.get(edge.source.nodeId);
+      
+      // 源节点未执行或失败，跳过
+      if (!sourceResult || sourceResult.status === 'failed' || sourceResult.status === 'skipped') {
+        continue;
+      }
+      
+      // 如果边有 branchId，检查分支决策
+      if (edge.branchId) {
+        const decision = context.branchDecisions.get(edge.source.nodeId);
+        if (decision && edge.branchId !== decision) {
+          continue;  // 分支不匹配
+        }
+      }
+      
+      // 有有效的路径到达该节点
+      return true;
+    }
+    
+    return false;
   }
 
   /**

@@ -38,19 +38,45 @@ def main(input):
       };
     case 'switch':
       return {
-        branches: [{ id: 'branch_1', name: '分支 1', condition: 'data.value > 0' }],
-        defaultBranch: 'default',
+        branches: [
+          { id: 'branch_1', name: '是', condition: 'data.value > 0' },
+          { id: 'branch_default', name: '否', condition: 'true' }
+        ],
+        defaultBranch: 'branch_default',
         evaluationMode: 'first-match'
       };
     case 'parallel':
       return {
-        branches: [{ id: 'parallel_1', name: '并行分支 1' }],
+        branches: [
+          { id: 'parallel_1', name: '分支 1' },
+          { id: 'parallel_2', name: '分支 2' }
+        ],
         waitMode: 'all',
         failMode: 'stop'
       };
     default:
       return {} as NodeConfig;
   }
+}
+
+/**
+ * 生成节点详细信息（用于可视化显示）
+ */
+function createDefaultNodeDetail(type: NodeType, config: NodeConfig): any {
+  if (type === 'switch' && 'branches' in config) {
+    const switchConfig = config as any;
+    return {
+      branches: switchConfig.branches,
+      defaultBranch: switchConfig.defaultBranch
+    };
+  }
+  if (type === 'parallel' && 'branches' in config) {
+    const parallelConfig = config as any;
+    return {
+      parallelBranches: parallelConfig.branches
+    };
+  }
+  return undefined;
 }
 
 /**
@@ -172,6 +198,9 @@ export class WorkflowEditorProvider implements vscode.CustomEditorProvider<Workf
   private handleAddNode(document: WorkflowDocument, node: WorkflowNode, webview: vscode.Webview): void {
     const config = createDefaultNodeConfig(node.type as NodeType);
     document.nodeConfigs.set(node.id, config);
+    
+    // 设置 detail 字段（用于可视化显示分支）
+    node.detail = createDefaultNodeDetail(node.type as NodeType, config);
     
     const ext = getConfigExtension(node.type as NodeType, config);
     node.configRef = ext === '.json' 
@@ -640,6 +669,31 @@ export class WorkflowEditorProvider implements vscode.CustomEditorProvider<Workf
     }
     .port-input { left: -7px; top: 50%; margin-top: -7px; }
     .port-output { right: -7px; top: 50%; margin-top: -7px; }
+    
+    /* 分支端口样式 */
+    .port-branch {
+      background: #ff9800;
+    }
+    .port-branch:hover {
+      background: #f57c00;
+    }
+    
+    /* 节点分支标签 */
+    .node-branch-labels {
+      position: absolute;
+      right: -70px;
+      top: 0;
+      font-size: 10px;
+      color: var(--vscode-descriptionForeground);
+      white-space: nowrap;
+    }
+    .node-branch-label {
+      position: absolute;
+      right: 0;
+      padding: 2px 4px;
+      background: var(--vscode-editorWidget-background);
+      border-radius: 2px;
+    }
     
     /* 边（连线） */
     #edges-svg {
@@ -1330,16 +1384,25 @@ export class WorkflowEditorProvider implements vscode.CustomEditorProvider<Workf
           const targetNodeId = targetNodeEl?.dataset.id;
           
           if (targetNodeId && targetNodeId !== connectingPort.nodeId) {
+            // 检查是否已存在相同的边
             const exists = workflow.edges.some(e => 
-              e.source.nodeId === connectingPort.nodeId && e.target.nodeId === targetNodeId
+              e.source.nodeId === connectingPort.nodeId && 
+              e.target.nodeId === targetNodeId &&
+              (e.branchId === connectingPort.branchId || (!e.branchId && !connectingPort.branchId))
             );
             
             if (!exists) {
-              const edge = {
+              const edge: any = {
                 id: 'edge_' + Date.now(),
                 source: { nodeId: connectingPort.nodeId, portId: 'output' },
                 target: { nodeId: targetNodeId, portId: 'input' }
               };
+              
+              // 如果是从分支端口拉出的线，添加 branchId
+              if (connectingPort.branchId) {
+                edge.branchId = connectingPort.branchId;
+              }
+              
               workflow.edges.push(edge);
               renderEdges();
               pushHistory('添加连线');
@@ -1472,6 +1535,31 @@ export class WorkflowEditorProvider implements vscode.CustomEditorProvider<Workf
           'pending': '○'
         }[status] || '';
         
+        // 生成输出端口
+        let outputPorts = '';
+        if (node.type === 'switch' && node.detail?.branches) {
+          // switch 节点显示多个分支端口
+          const branches = node.detail.branches;
+          const portHeight = 100; // 节点高度
+          const step = portHeight / (branches.length + 1);
+          outputPorts = branches.map((branch, i) => {
+            const topOffset = 20 + step * (i + 1);
+            return \`<div class="port port-output port-branch" data-port="output" data-branch-id="\${branch.id}" style="top: \${topOffset}px;" title="\${branch.name}: \${branch.condition}"></div>\`;
+          }).join('');
+        } else if (node.type === 'parallel' && node.detail?.parallelBranches) {
+          // parallel 节点显示多个分支端口
+          const branches = node.detail.parallelBranches;
+          const portHeight = 100;
+          const step = portHeight / (branches.length + 1);
+          outputPorts = branches.map((branch, i) => {
+            const topOffset = 20 + step * (i + 1);
+            return \`<div class="port port-output port-branch" data-port="output" data-branch-id="\${branch.id}" style="top: \${topOffset}px;" title="\${branch.name}"></div>\`;
+          }).join('');
+        } else if (node.type !== 'end') {
+          // 普通节点单一输出端口
+          outputPorts = '<div class="port port-output" data-port="output"></div>';
+        }
+        
         return \`
         <div class="node node-type-\${node.type} \${selectedNode?.id === node.id ? 'selected' : ''} \${statusClass}" 
              data-id="\${node.id}" 
@@ -1483,7 +1571,7 @@ export class WorkflowEditorProvider implements vscode.CustomEditorProvider<Workf
           </div>
           <div class="node-body">\${node.metadata.description || '双击编辑'}</div>
           \${node.type !== 'start' ? '<div class="port port-input" data-port="input"></div>' : ''}
-          \${node.type !== 'end' ? '<div class="port port-output" data-port="output"></div>' : ''}
+          \${outputPorts}
         </div>
       \`}).join('');
       attachNodeEvents();
@@ -1494,12 +1582,27 @@ export class WorkflowEditorProvider implements vscode.CustomEditorProvider<Workf
         const sourceNode = workflow.nodes.find(n => n.id === edge.source.nodeId);
         const targetNode = workflow.nodes.find(n => n.id === edge.target.nodeId);
         if (!sourceNode || !targetNode) return '';
-        const x1 = sourceNode.position.x + 150;
-        const y1 = sourceNode.position.y + 40;
+        
+        // 计算源端口位置
+        let x1 = sourceNode.position.x + 150;
+        let y1 = sourceNode.position.y + 40;
+        
+        // 如果有 branchId，计算分支端口位置
+        if (edge.branchId && (sourceNode.type === 'switch' || sourceNode.type === 'parallel')) {
+          const branches = sourceNode.detail?.branches || sourceNode.detail?.parallelBranches || [];
+          const branchIndex = branches.findIndex(b => b.id === edge.branchId);
+          if (branchIndex >= 0) {
+            const portHeight = 100;
+            const step = portHeight / (branches.length + 1);
+            y1 = sourceNode.position.y + 20 + step * (branchIndex + 1);
+          }
+        }
+        
         const x2 = targetNode.position.x;
         const y2 = targetNode.position.y + 40;
+        
         const isActive = executedEdges.has(edge.id) ? 'active' : '';
-        return \`<path class="\${isActive}" d="M \${x1} \${y1} C \${x1 + 50} \${y1}, \${x2 - 50} \${y2}, \${x2} \${y2}" stroke-linecap="round"/>\`;
+        return \`<path class="\${isActive}" data-edge-id="\${edge.id}" d="M \${x1} \${y1} C \${x1 + 50} \${y1}, \${x2 - 50} \${y2}, \${x2} \${y2}" stroke-linecap="round"/>\`;
       }).join('');
       edgesSvg.innerHTML = paths + '<path id="temp-edge" style="display: none;"/>';
     }
@@ -1524,7 +1627,12 @@ export class WorkflowEditorProvider implements vscode.CustomEditorProvider<Workf
       document.querySelectorAll('.port-output').forEach(port => {
         port.addEventListener('mousedown', e => {
           const nodeEl = port.closest('.node');
-          connectingPort = { nodeId: nodeEl.dataset.id, portType: 'output' };
+          const branchId = port.dataset.branchId || null;
+          connectingPort = { 
+            nodeId: nodeEl.dataset.id, 
+            portType: 'output',
+            branchId: branchId
+          };
           e.stopPropagation();
           e.preventDefault();
         });
