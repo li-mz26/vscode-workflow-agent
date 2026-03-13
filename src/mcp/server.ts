@@ -198,10 +198,7 @@ export class WorkflowMCPServer {
     this.engine = new WorkflowEngine();
     this.loadedWorkflows = new Map();
     
-    this.server = new Server(
-      { name: 'vscode-workflow-agent', version: '0.1.0' },
-      { capabilities: { tools: {} } }
-    );
+    this.server = new Server({ name: 'vscode-workflow-agent', version: '0.1.0' });
 
     this.setupHandlers();
   }
