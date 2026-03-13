@@ -3,10 +3,9 @@ import { ChildProcessWithoutNullStreams, spawn } from 'child_process';
 import * as path from 'path';
 
 interface MCPServerConfig {
-  command: string;
-  args: string;
   cwd: string;
-  autoStart: boolean;
+  host: string;
+  port: number;
 }
 
 type MCPStatus = 'stopped' | 'starting' | 'running' | 'error';
@@ -53,16 +52,22 @@ export class MCPControlPanelProvider implements vscode.WebviewViewProvider, vsco
     }
 
     const config = this.getConfig();
-    const args = this.parseArgs(config.args);
+    const entryFile = this.context.asAbsolutePath(path.join('out', 'mcp', 'server.js'));
+    const args = ['-e', `require('${entryFile.replace(/\\/g, '\\\\')}').runMCPServer()`];
 
     this.status = 'starting';
-    this.appendOutput(`[info] starting: ${config.command} ${args.join(' ')}\n`);
+    this.appendOutput(`[info] starting mcp server at http://${config.host}:${config.port}\n`);
     this.postState();
 
     try {
-      this.process = spawn(config.command, args, {
-        cwd: config.cwd || undefined,
-        env: process.env,
+      this.process = spawn(process.execPath, args, {
+        cwd: config.cwd || this.context.extensionPath,
+        env: {
+          ...process.env,
+          WORKFLOW_MCP_HOST: config.host,
+          WORKFLOW_MCP_PORT: String(config.port),
+          WORKFLOW_MCP_CWD: config.cwd || this.context.extensionPath
+        },
         stdio: 'pipe'
       });
 
@@ -121,10 +126,9 @@ export class MCPControlPanelProvider implements vscode.WebviewViewProvider, vsco
     const saved = this.context.workspaceState.get<Partial<MCPServerConfig>>('workflowAgent.mcpConfig', {});
 
     return {
-      command: saved.command || defaultConfig.command,
-      args: saved.args || defaultConfig.args,
       cwd: saved.cwd || defaultConfig.cwd,
-      autoStart: saved.autoStart ?? defaultConfig.autoStart
+      host: saved.host || defaultConfig.host,
+      port: saved.port || defaultConfig.port
     };
   }
 
@@ -133,18 +137,11 @@ export class MCPControlPanelProvider implements vscode.WebviewViewProvider, vsco
   }
 
   private getDefaultConfig(): MCPServerConfig {
-    const entryFile = this.context.asAbsolutePath(path.join('out', 'mcp', 'server.js'));
     return {
-      command: process.execPath,
-      args: `-e "require('${entryFile.replace(/\\/g, '\\\\')}').runMCPServer()"`,
       cwd: this.context.extensionPath,
-      autoStart: false
+      host: '127.0.0.1',
+      port: 8765
     };
-  }
-
-  private parseArgs(args: string): string[] {
-    const matches = args.match(/(?:[^\s"']+|"[^"]*"|'[^']*')+/g) || [];
-    return matches.map((token) => token.replace(/^['"]|['"]$/g, ''));
   }
 
   private appendOutput(text: string): void {
@@ -178,7 +175,7 @@ export class MCPControlPanelProvider implements vscode.WebviewViewProvider, vsco
     body { font-family: var(--vscode-font-family); padding: 10px; color: var(--vscode-foreground); }
     .row { margin-bottom: 10px; }
     label { font-size: 12px; display:block; margin-bottom:4px; color: var(--vscode-descriptionForeground); }
-    input { width: 100%; box-sizing: border-box; padding: 6px; background: var(--vscode-input-background); color: var(--vscode-input-foreground); border: 1px solid var(--vscode-input-border); }
+    input, select { width: 100%; box-sizing: border-box; padding: 6px; background: var(--vscode-input-background); color: var(--vscode-input-foreground); border: 1px solid var(--vscode-input-border); }
     .actions { display: flex; gap: 8px; margin: 12px 0; }
     button { flex: 1; padding: 6px; border: none; cursor: pointer; color: var(--vscode-button-foreground); background: var(--vscode-button-background); }
     button.secondary { background: var(--vscode-button-secondaryBackground); color: var(--vscode-button-secondaryForeground); }
@@ -187,9 +184,14 @@ export class MCPControlPanelProvider implements vscode.WebviewViewProvider, vsco
   </style>
 </head>
 <body>
-  <div class="row"><label>命令</label><input id="command" /></div>
-  <div class="row"><label>参数</label><input id="args" /></div>
   <div class="row"><label>工作目录</label><input id="cwd" /></div>
+  <div class="row"><label>监听地址</label>
+    <select id="host">
+      <option value="127.0.0.1">127.0.0.1 (本机)</option>
+      <option value="0.0.0.0">0.0.0.0 (局域网可访问)</option>
+    </select>
+  </div>
+  <div class="row"><label>端口</label><input id="port" type="number" min="1" max="65535" /></div>
   <div class="actions">
     <button id="save">保存配置</button>
     <button id="start">启动</button>
@@ -205,9 +207,9 @@ export class MCPControlPanelProvider implements vscode.WebviewViewProvider, vsco
     window.addEventListener('message', (event) => {
       const msg = event.data;
       if (msg.type !== 'state') return;
-      byId('command').value = msg.config.command || '';
-      byId('args').value = msg.config.args || '';
       byId('cwd').value = msg.config.cwd || '';
+      byId('host').value = msg.config.host || '127.0.0.1';
+      byId('port').value = msg.config.port || 8765;
       byId('status').textContent = '状态: ' + msg.status;
       byId('output').textContent = msg.output || '';
     });
@@ -216,10 +218,9 @@ export class MCPControlPanelProvider implements vscode.WebviewViewProvider, vsco
       vscode.postMessage({
         type: 'saveConfig',
         config: {
-          command: byId('command').value,
-          args: byId('args').value,
           cwd: byId('cwd').value,
-          autoStart: false
+          host: byId('host').value,
+          port: Number(byId('port').value) || 8765
         }
       });
     });

@@ -4,6 +4,9 @@
 
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
+import { SSEServerTransport } from '@modelcontextprotocol/sdk/server/sse.js';
+import * as http from 'http';
+import { URL } from 'url';
 import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
@@ -424,10 +427,74 @@ export class WorkflowMCPServer {
 
   // ============ 启动服务器 ============
 
-  async run(): Promise<void> {
+  async runStdio(): Promise<void> {
     const transport = new StdioServerTransport();
     await this.server.connect(transport);
     console.error('Workflow MCP Server running on stdio');
+  }
+
+  async runHttp(host: string, port: number): Promise<void> {
+    let sseTransport: SSEServerTransport | undefined;
+
+    const httpServer = http.createServer(async (req, res) => {
+      const reqUrl = new URL(req.url || '/', `http://${host}:${port}`);
+
+      if (req.method === 'GET' && reqUrl.pathname === '/health') {
+        res.writeHead(200, { 'content-type': 'application/json' });
+        res.end(JSON.stringify({ ok: true, transport: 'sse' }));
+        return;
+      }
+
+      if (req.method === 'GET' && reqUrl.pathname === '/sse') {
+        if (sseTransport) {
+          res.writeHead(409, { 'content-type': 'text/plain' });
+          res.end('SSE session already established');
+          return;
+        }
+
+        sseTransport = new SSEServerTransport('/message', res);
+        sseTransport.onclose = () => { sseTransport = undefined; };
+        try {
+          await this.server.connect(sseTransport);
+        } catch (error) {
+          console.error('Failed to connect SSE transport:', error);
+          sseTransport = undefined;
+          if (!res.headersSent) {
+            res.writeHead(500, { 'content-type': 'text/plain' });
+            res.end('Failed to establish SSE transport');
+          }
+        }
+        return;
+      }
+
+      if (req.method === 'POST' && reqUrl.pathname === '/message') {
+        if (!sseTransport) {
+          res.writeHead(400, { 'content-type': 'text/plain' });
+          res.end('SSE session not established');
+          return;
+        }
+
+        const sessionId = reqUrl.searchParams.get('sessionId');
+        if (sessionId !== sseTransport.sessionId) {
+          res.writeHead(404, { 'content-type': 'text/plain' });
+          res.end('Unknown sessionId');
+          return;
+        }
+
+        await sseTransport.handlePostMessage(req, res);
+        return;
+      }
+
+      res.writeHead(404, { 'content-type': 'text/plain' });
+      res.end('Not found');
+    });
+
+    await new Promise<void>((resolve, reject) => {
+      httpServer.once('error', reject);
+      httpServer.listen(port, host, () => resolve());
+    });
+
+    console.error(`Workflow MCP Server running at http://${host}:${port} (GET /sse, POST /message, GET /health)`);
   }
 }
 
@@ -435,7 +502,24 @@ export class WorkflowMCPServer {
 
 export async function runMCPServer(): Promise<void> {
   const server = new WorkflowMCPServer();
-  await server.run();
+
+  const cwd = process.env.WORKFLOW_MCP_CWD;
+  if (cwd) {
+    try {
+      process.chdir(cwd);
+    } catch (error) {
+      console.error('Failed to change cwd:', error);
+    }
+  }
+
+  const host = process.env.WORKFLOW_MCP_HOST || '127.0.0.1';
+  const port = Number(process.env.WORKFLOW_MCP_PORT || 0);
+
+  if (port > 0) {
+    await server.runHttp(host, port);
+  } else {
+    await server.runStdio();
+  }
 }
 
 export default WorkflowMCPServer;
