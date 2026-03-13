@@ -4,12 +4,12 @@
 
 import * as vscode from 'vscode';
 import { WorkflowEditorProvider } from './webview/editor';
-import { WorkflowExplorer } from './webview/explorer';
+import { MCPControlPanelProvider } from './sidebar/mcpPanel';
 import { WorkflowEngine, WorkflowLoader } from './engine';
 import { Workflow } from './engine/types';
 
 let workflowEditorProvider: WorkflowEditorProvider;
-let workflowExplorer: WorkflowExplorer;
+let mcpPanelProvider: MCPControlPanelProvider;
 
 export function activate(context: vscode.ExtensionContext): void {
   console.log('Workflow Agent extension is activating...');
@@ -24,13 +24,15 @@ export function activate(context: vscode.ExtensionContext): void {
     )
   );
 
-  // 注册树视图
-  workflowExplorer = new WorkflowExplorer(context);
+  // 注册 MCP 控制面板
+  mcpPanelProvider = new MCPControlPanelProvider(context);
   context.subscriptions.push(
-    vscode.window.createTreeView('workflowAgent.explorer', {
-      treeDataProvider: workflowExplorer
-    })
+    vscode.window.registerWebviewViewProvider(
+      MCPControlPanelProvider.viewType,
+      mcpPanelProvider
+    )
   );
+  context.subscriptions.push(mcpPanelProvider);
 
   // 注册命令
   registerCommands(context);
@@ -110,7 +112,6 @@ function registerCommands(context: vscode.ExtensionContext): void {
         const workflowFile = vscode.Uri.joinPath(folder[0], `${name}.workflow.json`);
         await vscode.commands.executeCommand('vscode.openWith', workflowFile, 'workflowAgent.editor');
         vscode.window.showInformationMessage(`工作流 "${name}" 创建成功！`);
-        workflowExplorer.refresh();
       } else {
         vscode.window.showErrorMessage(`创建失败: ${saveResult.error}`);
       }
@@ -155,10 +156,16 @@ function registerCommands(context: vscode.ExtensionContext): void {
     })
   );
 
-  // 刷新工作流列表
+  // MCP 服务控制命令
   context.subscriptions.push(
-    vscode.commands.registerCommand('workflowAgent.refresh', () => {
-      workflowExplorer.refresh();
+    vscode.commands.registerCommand('workflowAgent.mcpStart', async () => {
+      await mcpPanelProvider.startServer();
+    })
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand('workflowAgent.mcpStop', () => {
+      mcpPanelProvider.stopServer();
     })
   );
 }
