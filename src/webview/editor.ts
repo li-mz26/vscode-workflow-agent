@@ -1519,6 +1519,30 @@ export class WorkflowEditorProvider implements vscode.CustomEditorProvider<Workf
     }
     
     // ========== 渲染 ==========
+    function getBranchNodeHeight(branches) {
+      const minHeight = 100;
+      const headerAndBodyHeight = 56;
+      const perBranchHeight = 24;
+      return Math.max(minHeight, headerAndBodyHeight + branches.length * perBranchHeight);
+    }
+
+    function getNodeHeight(node) {
+      if (node.type === 'switch' && node.detail?.branches) {
+        return getBranchNodeHeight(node.detail.branches);
+      }
+      if (node.type === 'parallel' && node.detail?.parallelBranches) {
+        return getBranchNodeHeight(node.detail.parallelBranches);
+      }
+      return 80;
+    }
+
+    function getBranchPortTopOffset(branches, branchIndex, nodeHeight) {
+      const topPadding = 20;
+      const availableHeight = Math.max(20, nodeHeight - topPadding * 2);
+      const step = availableHeight / (branches.length + 1);
+      return topPadding + step * (branchIndex + 1);
+    }
+
     function render() {
       renderNodes();
       renderEdges();
@@ -1534,25 +1558,22 @@ export class WorkflowEditorProvider implements vscode.CustomEditorProvider<Workf
           'failed': '✗',
           'pending': '○'
         }[status] || '';
+        const nodeHeight = getNodeHeight(node);
         
         // 生成输出端口
         let outputPorts = '';
         if (node.type === 'switch' && node.detail?.branches) {
           // switch 节点显示多个分支端口
           const branches = node.detail.branches;
-          const portHeight = 100; // 节点高度
-          const step = portHeight / (branches.length + 1);
           outputPorts = branches.map((branch, i) => {
-            const topOffset = 20 + step * (i + 1);
+            const topOffset = getBranchPortTopOffset(branches, i, nodeHeight);
             return '<div class="port port-output port-branch" data-port="output" data-branch-id="' + branch.id + '" style="top: ' + topOffset + 'px;" title="' + branch.name + ': ' + branch.condition + '"></div>';
           }).join('');
         } else if (node.type === 'parallel' && node.detail?.parallelBranches) {
           // parallel 节点显示多个分支端口
           const branches = node.detail.parallelBranches;
-          const portHeight = 100;
-          const step = portHeight / (branches.length + 1);
           outputPorts = branches.map((branch, i) => {
-            const topOffset = 20 + step * (i + 1);
+            const topOffset = getBranchPortTopOffset(branches, i, nodeHeight);
             return '<div class="port port-output port-branch" data-port="output" data-branch-id="' + branch.id + '" style="top: ' + topOffset + 'px;" title="' + branch.name + '"></div>';
           }).join('');
         } else if (node.type !== 'end') {
@@ -1562,7 +1583,7 @@ export class WorkflowEditorProvider implements vscode.CustomEditorProvider<Workf
         
         return '<div class="node node-type-' + node.type + ' ' + (selectedNode?.id === node.id ? 'selected' : '') + ' ' + statusClass + '" ' +
              'data-id="' + node.id + '" ' +
-             'style="left: ' + node.position.x + 'px; top: ' + node.position.y + 'px;">' +
+             'style="left: ' + node.position.x + 'px; top: ' + node.position.y + 'px; min-height: ' + nodeHeight + 'px;">' +
           '<div class="node-status-badge ' + (status || '') + '">' + statusIcon + '</div>' +
           '<div class="node-header">' +
             '<span class="node-type-icon">' + getNodeIcon(node.type) + '</span>' +
@@ -1581,24 +1602,24 @@ export class WorkflowEditorProvider implements vscode.CustomEditorProvider<Workf
         const sourceNode = workflow.nodes.find(n => n.id === edge.source.nodeId);
         const targetNode = workflow.nodes.find(n => n.id === edge.target.nodeId);
         if (!sourceNode || !targetNode) return '';
+        const sourceNodeHeight = getNodeHeight(sourceNode);
+        const targetNodeHeight = getNodeHeight(targetNode);
         
         // 计算源端口位置
         let x1 = sourceNode.position.x + 150;
-        let y1 = sourceNode.position.y + 40;
+        let y1 = sourceNode.position.y + sourceNodeHeight / 2;
         
         // 如果有 branchId，计算分支端口位置
         if (edge.branchId && (sourceNode.type === 'switch' || sourceNode.type === 'parallel')) {
           const branches = sourceNode.detail?.branches || sourceNode.detail?.parallelBranches || [];
           const branchIndex = branches.findIndex(b => b.id === edge.branchId);
           if (branchIndex >= 0) {
-            const portHeight = 100;
-            const step = portHeight / (branches.length + 1);
-            y1 = sourceNode.position.y + 20 + step * (branchIndex + 1);
+            y1 = sourceNode.position.y + getBranchPortTopOffset(branches, branchIndex, sourceNodeHeight);
           }
         }
         
         const x2 = targetNode.position.x;
-        const y2 = targetNode.position.y + 40;
+        const y2 = targetNode.position.y + targetNodeHeight / 2;
         
         const isActive = executedEdges.has(edge.id) ? 'active' : '';
         return '<path class="' + isActive + '" data-edge-id="' + edge.id + '" d="M ' + x1 + ' ' + y1 + ' C ' + (x1 + 50) + ' ' + y1 + ', ' + (x2 - 50) + ' ' + y2 + ', ' + x2 + ' ' + y2 + '" stroke-linecap="round"/>';
