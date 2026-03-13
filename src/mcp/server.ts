@@ -201,7 +201,20 @@ export class WorkflowMCPServer {
     this.engine = new WorkflowEngine();
     this.loadedWorkflows = new Map();
     
-    this.server = new Server({ name: 'vscode-workflow-agent', version: '0.1.0' });
+    const serverInfo = { name: 'vscode-workflow-agent', version: '0.1.0' };
+
+    // 兼容不同版本 MCP SDK：
+    // - 新版可能要求在构造函数中显式声明 capabilities
+    // - 旧版仅接受 serverInfo 单参数
+    try {
+      this.server = new (Server as any)(serverInfo, {
+        capabilities: {
+          tools: {}
+        }
+      });
+    } catch {
+      this.server = new Server(serverInfo);
+    }
 
     this.setupHandlers();
   }
