@@ -392,7 +392,7 @@ export class WorkflowMCPServer {
     const setCorsHeaders = (res: http.ServerResponse) => {
       res.setHeader('Access-Control-Allow-Origin', '*');
       res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
-      res.setHeader('Access-Control-Allow-Headers', 'content-type, mcp-session-id');
+      res.setHeader('Access-Control-Allow-Headers', 'content-type, mcp-session-id, mcp-protocol-version');
       res.setHeader('Access-Control-Max-Age', '86400');
     };
 
