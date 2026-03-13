@@ -7,6 +7,8 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { SSEServerTransport } from '@modelcontextprotocol/sdk/server/sse.js';
 import * as http from 'http';
 import { URL } from 'url';
+import * as fs from 'fs';
+import * as path from 'path';
 import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
@@ -15,19 +17,27 @@ import {
 import { WorkflowEngine, WorkflowLoader } from '../engine';
 import { Workflow, NodeConfig, NodeType } from '../engine/types';
 
-// ============ 工具定义 ============
-
 const tools: Tool[] = [
+  {
+    name: 'workflow_scan',
+    description: '扫描目录下包含 *.workflow.json 的工作流文件夹路径',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        path: {
+          type: 'string',
+          description: '扫描根目录，默认使用 MCP Server 当前工作目录'
+        }
+      }
+    }
+  },
   {
     name: 'workflow_load',
     description: '从目录加载工作流定义',
     inputSchema: {
       type: 'object',
       properties: {
-        path: {
-          type: 'string',
-          description: '工作流目录路径'
-        }
+        path: { type: 'string', description: '工作流目录路径' }
       },
       required: ['path']
     }
@@ -38,18 +48,9 @@ const tools: Tool[] = [
     inputSchema: {
       type: 'object',
       properties: {
-        name: {
-          type: 'string',
-          description: '工作流名称'
-        },
-        description: {
-          type: 'string',
-          description: '工作流描述'
-        },
-        savePath: {
-          type: 'string',
-          description: '保存路径'
-        }
+        name: { type: 'string', description: '工作流名称' },
+        description: { type: 'string', description: '工作流描述' },
+        savePath: { type: 'string', description: '保存路径' }
       },
       required: ['name']
     }
@@ -60,18 +61,9 @@ const tools: Tool[] = [
     inputSchema: {
       type: 'object',
       properties: {
-        workflow: {
-          type: 'object',
-          description: '工作流定义'
-        },
-        nodeConfigs: {
-          type: 'object',
-          description: '节点配置映射'
-        },
-        savePath: {
-          type: 'string',
-          description: '保存路径'
-        }
+        workflow: { type: 'object', description: '工作流定义' },
+        nodeConfigs: { type: 'object', description: '节点配置映射' },
+        savePath: { type: 'string', description: '保存路径' }
       },
       required: ['workflow', 'savePath']
     }
@@ -82,14 +74,8 @@ const tools: Tool[] = [
     inputSchema: {
       type: 'object',
       properties: {
-        path: {
-          type: 'string',
-          description: '工作流目录路径'
-        },
-        input: {
-          type: 'object',
-          description: '初始输入数据'
-        }
+        path: { type: 'string', description: '工作流目录路径' },
+        input: { type: 'object', description: '初始输入数据' }
       },
       required: ['path']
     }
@@ -100,10 +86,7 @@ const tools: Tool[] = [
     inputSchema: {
       type: 'object',
       properties: {
-        workflow: {
-          type: 'object',
-          description: '工作流定义'
-        }
+        workflow: { type: 'object', description: '工作流定义' }
       },
       required: ['workflow']
     }
@@ -114,14 +97,8 @@ const tools: Tool[] = [
     inputSchema: {
       type: 'object',
       properties: {
-        workflow: {
-          type: 'object',
-          description: '工作流定义'
-        },
-        node: {
-          type: 'object',
-          description: '节点定义'
-        }
+        workflow: { type: 'object', description: '工作流定义' },
+        node: { type: 'object', description: '节点定义' }
       },
       required: ['workflow', 'node']
     }
@@ -132,14 +109,8 @@ const tools: Tool[] = [
     inputSchema: {
       type: 'object',
       properties: {
-        workflow: {
-          type: 'object',
-          description: '工作流定义'
-        },
-        nodeId: {
-          type: 'string',
-          description: '节点 ID'
-        }
+        workflow: { type: 'object', description: '工作流定义' },
+        nodeId: { type: 'string', description: '节点 ID' }
       },
       required: ['workflow', 'nodeId']
     }
@@ -150,14 +121,8 @@ const tools: Tool[] = [
     inputSchema: {
       type: 'object',
       properties: {
-        workflow: {
-          type: 'object',
-          description: '工作流定义'
-        },
-        edge: {
-          type: 'object',
-          description: '边定义'
-        }
+        workflow: { type: 'object', description: '工作流定义' },
+        edge: { type: 'object', description: '边定义' }
       },
       required: ['workflow', 'edge']
     }
@@ -168,14 +133,8 @@ const tools: Tool[] = [
     inputSchema: {
       type: 'object',
       properties: {
-        workflow: {
-          type: 'object',
-          description: '工作流定义'
-        },
-        edgeId: {
-          type: 'string',
-          description: '边 ID'
-        }
+        workflow: { type: 'object', description: '工作流定义' },
+        edgeId: { type: 'string', description: '边 ID' }
       },
       required: ['workflow', 'edgeId']
     }
@@ -183,14 +142,11 @@ const tools: Tool[] = [
   {
     name: 'node_types_list',
     description: '列出所有支持的节点类型',
-    inputSchema: {
-      type: 'object',
-      properties: {}
-    }
+    inputSchema: { type: 'object', properties: {} }
   }
 ];
 
-// ============ 服务器类 ============
+type HttpTransportMode = 'sse' | 'streamable-http';
 
 export class WorkflowMCPServer {
   private server: Server;
@@ -200,18 +156,10 @@ export class WorkflowMCPServer {
   constructor() {
     this.engine = new WorkflowEngine();
     this.loadedWorkflows = new Map();
-    
-    const serverInfo = { name: 'vscode-workflow-agent', version: '0.1.0' };
 
-    // 兼容不同版本 MCP SDK：
-    // - 新版可能要求在构造函数中显式声明 capabilities
-    // - 旧版仅接受 serverInfo 单参数
+    const serverInfo = { name: 'vscode-workflow-agent', version: '0.1.0' };
     try {
-      this.server = new (Server as any)(serverInfo, {
-        capabilities: {
-          tools: {}
-        }
-      });
+      this.server = new (Server as any)(serverInfo, { capabilities: { tools: {} } });
     } catch {
       this.server = new Server(serverInfo);
     }
@@ -220,87 +168,91 @@ export class WorkflowMCPServer {
   }
 
   private setupHandlers(): void {
-    // 列出工具
     this.server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools }));
 
-    // 处理工具调用
     this.server.setRequestHandler(CallToolRequestSchema, async (request) => {
       const { name, arguments: args } = request.params;
-      
-      try {
-        let result: any;
-        
-        switch (name) {
-          case 'workflow_load':
-            result = await this.handleWorkflowLoad(args as any);
-            break;
-          case 'workflow_create':
-            result = this.handleWorkflowCreate(args as any);
-            break;
-          case 'workflow_save':
-            result = await this.handleWorkflowSave(args as any);
-            break;
-          case 'workflow_run':
-            result = await this.handleWorkflowRun(args as any);
-            break;
-          case 'workflow_validate':
-            result = this.handleWorkflowValidate(args as any);
-            break;
-          case 'node_add':
-            result = this.handleNodeAdd(args as any);
-            break;
-          case 'node_remove':
-            result = this.handleNodeRemove(args as any);
-            break;
-          case 'edge_add':
-            result = this.handleEdgeAdd(args as any);
-            break;
-          case 'edge_remove':
-            result = this.handleEdgeRemove(args as any);
-            break;
-          case 'node_types_list':
-            result = this.handleNodeTypesList();
-            break;
-          default:
-            throw new Error(`Unknown tool: ${name}`);
-        }
 
+      try {
+        const result = await this.executeTool(name, args as any);
         return {
-          content: [
-            {
-              type: 'text',
-              text: JSON.stringify(result, null, 2)
-            }
-          ]
+          content: [{ type: 'text', text: JSON.stringify(result, null, 2) }]
         };
       } catch (error) {
         return {
-          content: [
-            {
-              type: 'text',
-              text: JSON.stringify({ error: String(error) }, null, 2)
-            }
-          ],
+          content: [{ type: 'text', text: JSON.stringify({ error: String(error) }, null, 2) }],
           isError: true
         };
       }
     });
   }
 
-  // ============ 工具处理函数 ============
+  private async executeTool(name: string, args: any): Promise<any> {
+    switch (name) {
+      case 'workflow_scan':
+        return this.handleWorkflowScan(args as any);
+      case 'workflow_load':
+        return this.handleWorkflowLoad(args as any);
+      case 'workflow_create':
+        return this.handleWorkflowCreate(args as any);
+      case 'workflow_save':
+        return this.handleWorkflowSave(args as any);
+      case 'workflow_run':
+        return this.handleWorkflowRun(args as any);
+      case 'workflow_validate':
+        return this.handleWorkflowValidate(args as any);
+      case 'node_add':
+        return this.handleNodeAdd(args as any);
+      case 'node_remove':
+        return this.handleNodeRemove(args as any);
+      case 'edge_add':
+        return this.handleEdgeAdd(args as any);
+      case 'edge_remove':
+        return this.handleEdgeRemove(args as any);
+      case 'node_types_list':
+        return this.handleNodeTypesList();
+      default:
+        throw new Error(`Unknown tool: ${name}`);
+    }
+  }
+
+  private async handleWorkflowScan(args: { path?: string }): Promise<any> {
+    const root = path.resolve(args.path || process.cwd());
+    const folders = new Set<string>();
+
+    const scanDir = (dir: string) => {
+      const entries = fs.readdirSync(dir, { withFileTypes: true });
+      for (const entry of entries) {
+        const fullPath = path.join(dir, entry.name);
+        if (entry.isDirectory()) {
+          if (entry.name === '.git' || entry.name === 'node_modules') continue;
+          scanDir(fullPath);
+        } else if (entry.name.endsWith('.workflow.json')) {
+          folders.add(path.dirname(fullPath));
+        }
+      }
+    };
+
+    try {
+      scanDir(root);
+    } catch (error) {
+      return { success: false, error: String(error), root, folders: [] };
+    }
+
+    return { success: true, root, folders: [...folders].sort() };
+  }
 
   private async handleWorkflowLoad(args: { path: string }): Promise<any> {
     const result = await WorkflowLoader.loadFromDirectory(args.path);
     if (!result.success) {
       return { success: false, error: result.error };
     }
-    
-    // 缓存加载的工作流
+
     this.loadedWorkflows.set(args.path, {
       workflow: result.workflow!,
       nodeConfigs: result.nodeConfigs!
     });
-    
+
     return {
       success: true,
       workflow: result.workflow,
@@ -323,10 +275,7 @@ export class WorkflowMCPServer {
     };
 
     if (args.savePath) {
-      this.loadedWorkflows.set(args.savePath, {
-        workflow,
-        nodeConfigs: new Map()
-      });
+      this.loadedWorkflows.set(args.savePath, { workflow, nodeConfigs: new Map() });
     }
 
     return { success: true, workflow };
@@ -345,7 +294,6 @@ export class WorkflowMCPServer {
   }
 
   private async handleWorkflowRun(args: { path: string; input?: any }): Promise<any> {
-    // 尝试从缓存获取，否则加载
     let cached = this.loadedWorkflows.get(args.path);
     if (!cached) {
       const result = await WorkflowLoader.loadFromDirectory(args.path);
@@ -362,12 +310,10 @@ export class WorkflowMCPServer {
   private handleWorkflowValidate(args: { workflow: Workflow }): any {
     const issues: string[] = [];
 
-    // 检查基本字段
     if (!args.workflow.id) issues.push('Missing workflow id');
     if (!args.workflow.name) issues.push('Missing workflow name');
     if (!args.workflow.version) issues.push('Missing workflow version');
 
-    // 检查节点
     if (!args.workflow.nodes?.length) {
       issues.push('Workflow has no nodes');
     } else {
@@ -378,7 +324,6 @@ export class WorkflowMCPServer {
         nodeIds.add(node.id);
       }
 
-      // 检查边引用
       for (const edge of args.workflow.edges || []) {
         if (!nodeIds.has(edge.source.nodeId)) {
           issues.push(`Edge references non-existent source node: ${edge.source.nodeId}`);
@@ -389,10 +334,7 @@ export class WorkflowMCPServer {
       }
     }
 
-    return {
-      valid: issues.length === 0,
-      issues
-    };
+    return { valid: issues.length === 0, issues };
   }
 
   private handleNodeAdd(args: { workflow: Workflow; node: any }): any {
@@ -438,15 +380,13 @@ export class WorkflowMCPServer {
     return { types };
   }
 
-  // ============ 启动服务器 ============
-
   async runStdio(): Promise<void> {
     const transport = new StdioServerTransport();
     await this.server.connect(transport);
     console.error('Workflow MCP Server running on stdio');
   }
 
-  async runHttp(host: string, port: number): Promise<void> {
+  async runHttp(host: string, port: number, mode: HttpTransportMode = 'sse'): Promise<void> {
     let sseTransport: SSEServerTransport | undefined;
 
     const setCorsHeaders = (res: http.ServerResponse) => {
@@ -454,6 +394,23 @@ export class WorkflowMCPServer {
       res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
       res.setHeader('Access-Control-Allow-Headers', 'content-type, mcp-session-id');
       res.setHeader('Access-Control-Max-Age', '86400');
+    };
+
+    const readJsonBody = async (req: http.IncomingMessage): Promise<any> => {
+      const chunks: Buffer[] = [];
+      for await (const chunk of req) {
+        chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+      }
+      const raw = Buffer.concat(chunks).toString('utf-8');
+      return raw ? JSON.parse(raw) : {};
+    };
+
+    const sendJsonRpc = (res: http.ServerResponse, id: any, payload: any, isError = false) => {
+      const body = isError
+        ? { jsonrpc: '2.0', id, error: payload }
+        : { jsonrpc: '2.0', id, result: payload };
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(JSON.stringify(body));
     };
 
     const httpServer = http.createServer(async (req, res) => {
@@ -469,48 +426,89 @@ export class WorkflowMCPServer {
 
       if (req.method === 'GET' && reqUrl.pathname === '/health') {
         res.writeHead(200, { 'content-type': 'application/json' });
-        res.end(JSON.stringify({ ok: true, transport: 'sse' }));
+        res.end(JSON.stringify({ ok: true, transport: mode }));
         return;
       }
 
-      if (req.method === 'GET' && (reqUrl.pathname === '/sse' || reqUrl.pathname === '/mcp')) {
-        if (sseTransport) {
-          res.writeHead(409, { 'content-type': 'text/plain' });
-          res.end('SSE session already established');
-          return;
-        }
-
-        sseTransport = new SSEServerTransport('/mcp', res);
-        sseTransport.onclose = () => { sseTransport = undefined; };
-        try {
-          await this.server.connect(sseTransport);
-        } catch (error) {
-          console.error('Failed to connect SSE transport:', error);
-          sseTransport = undefined;
-          if (!res.headersSent) {
-            res.writeHead(500, { 'content-type': 'text/plain' });
-            res.end('Failed to establish SSE transport');
+      if (mode === 'sse') {
+        if (req.method === 'GET' && (reqUrl.pathname === '/sse' || reqUrl.pathname === '/mcp')) {
+          if (sseTransport) {
+            res.writeHead(409, { 'content-type': 'text/plain' });
+            res.end('SSE session already established');
+            return;
           }
+
+          sseTransport = new SSEServerTransport('/mcp', res);
+          sseTransport.onclose = () => { sseTransport = undefined; };
+          await this.server.connect(sseTransport);
+          return;
         }
-        return;
+
+        if (req.method === 'POST' && (reqUrl.pathname === '/message' || reqUrl.pathname === '/mcp')) {
+          if (!sseTransport) {
+            res.writeHead(400, { 'content-type': 'text/plain' });
+            res.end('SSE session not established');
+            return;
+          }
+
+          const sessionId = reqUrl.searchParams.get('sessionId');
+          if (sessionId !== sseTransport.sessionId) {
+            res.writeHead(404, { 'content-type': 'text/plain' });
+            res.end('Unknown sessionId');
+            return;
+          }
+
+          await sseTransport.handlePostMessage(req, res);
+          return;
+        }
       }
 
-      if (req.method === 'POST' && (reqUrl.pathname === '/message' || reqUrl.pathname === '/mcp')) {
-        if (!sseTransport) {
-          res.writeHead(400, { 'content-type': 'text/plain' });
-          res.end('SSE session not established');
+      if (mode === 'streamable-http' && req.method === 'POST' && reqUrl.pathname === '/mcp') {
+        try {
+          const message = await readJsonBody(req);
+          const id = message?.id;
+          const method = message?.method;
+          const params = message?.params || {};
+
+          if (!method) {
+            sendJsonRpc(res, id ?? null, { code: -32600, message: 'Invalid Request' }, true);
+            return;
+          }
+
+          if (method === 'initialize') {
+            sendJsonRpc(res, id, {
+              protocolVersion: '2024-11-05',
+              capabilities: { tools: {} },
+              serverInfo: { name: 'vscode-workflow-agent', version: '0.1.0' }
+            });
+            return;
+          }
+
+          if (method === 'notifications/initialized') {
+            res.writeHead(202);
+            res.end();
+            return;
+          }
+
+          if (method === 'tools/list') {
+            sendJsonRpc(res, id, { tools });
+            return;
+          }
+
+          if (method === 'tools/call') {
+            const toolResult = await this.executeTool(params.name, params.arguments || {});
+            sendJsonRpc(res, id, {
+              content: [{ type: 'text', text: JSON.stringify(toolResult, null, 2) }]
+            });
+            return;
+          }
+
+          sendJsonRpc(res, id, { code: -32601, message: `Method not found: ${method}` }, true);
+          return;
+        } catch (error) {
+          sendJsonRpc(res, null, { code: -32603, message: String(error) }, true);
           return;
         }
-
-        const sessionId = reqUrl.searchParams.get('sessionId');
-        if (sessionId !== sseTransport.sessionId) {
-          res.writeHead(404, { 'content-type': 'text/plain' });
-          res.end('Unknown sessionId');
-          return;
-        }
-
-        await sseTransport.handlePostMessage(req, res);
-        return;
       }
 
       res.writeHead(404, { 'content-type': 'text/plain' });
@@ -522,11 +520,9 @@ export class WorkflowMCPServer {
       httpServer.listen(port, host, () => resolve());
     });
 
-    console.error(`Workflow MCP Server running at http://${host}:${port} (GET /mcp|/sse, POST /mcp|/message, GET /health, CORS enabled)`);
+    console.error(`Workflow MCP Server running at http://${host}:${port} mode=${mode} (GET /health, /mcp)`);
   }
 }
-
-// ============ CLI 入口 ============
 
 export async function runMCPServer(): Promise<void> {
   const server = new WorkflowMCPServer();
@@ -542,9 +538,10 @@ export async function runMCPServer(): Promise<void> {
 
   const host = process.env.WORKFLOW_MCP_HOST || '127.0.0.1';
   const port = Number(process.env.WORKFLOW_MCP_PORT || 0);
+  const transport = (process.env.WORKFLOW_MCP_TRANSPORT || 'sse') as HttpTransportMode;
 
   if (port > 0) {
-    await server.runHttp(host, port);
+    await server.runHttp(host, port, transport);
   } else {
     await server.runStdio();
   }

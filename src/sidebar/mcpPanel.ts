@@ -6,6 +6,7 @@ interface MCPServerConfig {
   cwd: string;
   host: string;
   port: number;
+  transport: 'sse' | 'streamable-http';
 }
 
 type MCPStatus = 'stopped' | 'starting' | 'running' | 'error';
@@ -56,7 +57,7 @@ export class MCPControlPanelProvider implements vscode.WebviewViewProvider, vsco
     const args = ['-e', `require('${entryFile.replace(/\\/g, '\\\\')}').runMCPServer()`];
 
     this.status = 'starting';
-    this.appendOutput(`[info] starting mcp server at http://${config.host}:${config.port}\n`);
+    this.appendOutput(`[info] starting mcp server at http://${config.host}:${config.port} (${config.transport})\n`);
     this.postState();
 
     try {
@@ -66,7 +67,8 @@ export class MCPControlPanelProvider implements vscode.WebviewViewProvider, vsco
           ...process.env,
           WORKFLOW_MCP_HOST: config.host,
           WORKFLOW_MCP_PORT: String(config.port),
-          WORKFLOW_MCP_CWD: config.cwd || this.context.extensionPath
+          WORKFLOW_MCP_CWD: config.cwd || this.context.extensionPath,
+          WORKFLOW_MCP_TRANSPORT: config.transport
         },
         stdio: 'pipe'
       });
@@ -128,7 +130,8 @@ export class MCPControlPanelProvider implements vscode.WebviewViewProvider, vsco
     return {
       cwd: saved.cwd || defaultConfig.cwd,
       host: saved.host || defaultConfig.host,
-      port: saved.port || defaultConfig.port
+      port: saved.port || defaultConfig.port,
+      transport: saved.transport || defaultConfig.transport
     };
   }
 
@@ -140,7 +143,8 @@ export class MCPControlPanelProvider implements vscode.WebviewViewProvider, vsco
     return {
       cwd: this.context.extensionPath,
       host: '127.0.0.1',
-      port: 8765
+      port: 8765,
+      transport: 'streamable-http'
     };
   }
 
@@ -191,7 +195,7 @@ export class MCPControlPanelProvider implements vscode.WebviewViewProvider, vsco
       <option value="0.0.0.0">0.0.0.0 (局域网可访问)</option>
     </select>
   </div>
-  <div class="row"><label>端口</label><input id="port" type="number" min="1" max="65535" /></div>
+  <div class="row"><label>端口</label><input id="port" type="number" min="1" max="65535" /></div>\n  <div class="row"><label>传输协议</label>\n    <select id="transport">\n      <option value="streamable-http">streamable-http</option>\n      <option value="sse">sse</option>\n    </select>\n  </div>
   <div class="actions">
     <button id="save">保存配置</button>
     <button id="start">启动</button>
@@ -210,6 +214,7 @@ export class MCPControlPanelProvider implements vscode.WebviewViewProvider, vsco
       byId('cwd').value = msg.config.cwd || '';
       byId('host').value = msg.config.host || '127.0.0.1';
       byId('port').value = msg.config.port || 8765;
+      byId('transport').value = msg.config.transport || 'streamable-http';
       byId('status').textContent = '状态: ' + msg.status;
       byId('output').textContent = msg.output || '';
     });
@@ -220,7 +225,8 @@ export class MCPControlPanelProvider implements vscode.WebviewViewProvider, vsco
         config: {
           cwd: byId('cwd').value,
           host: byId('host').value,
-          port: Number(byId('port').value) || 8765
+          port: Number(byId('port').value) || 8765,
+          transport: byId('transport').value || 'streamable-http'
         }
       });
     });

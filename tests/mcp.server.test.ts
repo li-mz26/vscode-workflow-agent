@@ -66,6 +66,24 @@ describe('WorkflowMCPServer', () => {
     expect(Array.isArray(run.result.nodeResults)).toBe(true);
   });
 
+
+  it('should scan workflow folders under current working directory', async () => {
+    const server = new WorkflowMCPServer() as any;
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'workflow-scan-'));
+    const wfDir = path.join(dir, 'demo-a');
+    fs.mkdirSync(wfDir, { recursive: true });
+    fs.writeFileSync(path.join(wfDir, 'demo-a.workflow.json'), JSON.stringify({ id: 'x', name: 'x', version: '1.0.0', nodes: [], edges: [] }));
+
+    const nested = path.join(dir, 'nested', 'demo-b');
+    fs.mkdirSync(nested, { recursive: true });
+    fs.writeFileSync(path.join(nested, 'demo-b.workflow.json'), JSON.stringify({ id: 'y', name: 'y', version: '1.0.0', nodes: [], edges: [] }));
+
+    const result = await server.handleWorkflowScan({ path: dir });
+    expect(result.success).toBe(true);
+    expect(result.folders).toContain(wfDir);
+    expect(result.folders).toContain(nested);
+  });
+
   it('should expose supported node types', () => {
     const server = new WorkflowMCPServer() as any;
     const result = server.handleNodeTypesList();
