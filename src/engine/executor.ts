@@ -37,7 +37,7 @@ export type ExecutionEvent =
   | { type: 'workflow:start'; workflowId: string; executionId: string }
   | { type: 'workflow:end'; result: WorkflowExecutionResult }
   | { type: 'node:start'; nodeId: string; input: any }
-  | { type: 'node:end'; result: NodeExecutionResult }
+  | { type: 'node:end'; result: NodeExecutionResult; incomingEdgeId?: string }
   | { type: 'node:error'; nodeId: string; error: string };
 
 export type ExecutionEventHandler = (event: ExecutionEvent) => void;
@@ -229,7 +229,9 @@ export class WorkflowEngine {
         if (!node) continue;
 
         // 检查是否应该执行该节点（分支决策）
-        if (!this.shouldExecuteNode(nodeId, workflow, context)) {
+        const incomingEdge = this.getExecutedIncomingEdge(nodeId, workflow, context);
+        const hasIncoming = workflow.edges.some(e => e.target.nodeId === nodeId);
+        if (hasIncoming && !incomingEdge) {
           executed.add(nodeId);
           // 标记为跳过
           context.nodeResults.set(nodeId, {
@@ -243,7 +245,7 @@ export class WorkflowEngine {
         }
 
         // 执行节点
-        const result = await this.executeNode(node, nodeConfigs, context);
+        const result = await this.executeNode(node, nodeConfigs, context, incomingEdge?.id);
         context.nodeResults.set(nodeId, result);
         executed.add(nodeId);
 
@@ -295,39 +297,38 @@ export class WorkflowEngine {
   /**
    * 检查节点是否应该执行
    */
-  private shouldExecuteNode(
-    nodeId: string, 
-    workflow: Workflow, 
+  private getExecutedIncomingEdge(
+    nodeId: string,
+    workflow: Workflow,
     context: ExecutionContext
-  ): boolean {
+  ): WorkflowEdge | undefined {
     // 找到所有指向该节点的边
     const incomingEdges = workflow.edges.filter(e => e.target.nodeId === nodeId);
-    
-    // 如果没有入边，应该执行（起始节点）
-    if (incomingEdges.length === 0) return true;
-    
-    // 检查是否有来自已执行节点的有效路径
+
+    // 如果没有入边，表示起始节点
+    if (incomingEdges.length === 0) return undefined;
+
+    // 找到真正可达该节点的入边（用于执行与高亮）
     for (const edge of incomingEdges) {
       const sourceResult = context.nodeResults.get(edge.source.nodeId);
-      
+
       // 源节点未执行或失败，跳过
       if (!sourceResult || sourceResult.status === 'failed' || sourceResult.status === 'skipped') {
         continue;
       }
-      
+
       // 如果边有 branchId，检查分支决策
       if (edge.branchId) {
         const decision = context.branchDecisions.get(edge.source.nodeId);
         if (decision && edge.branchId !== decision) {
-          continue;  // 分支不匹配
+          continue;
         }
       }
-      
-      // 有有效的路径到达该节点
-      return true;
+
+      return edge;
     }
-    
-    return false;
+
+    return undefined;
   }
 
   /**
@@ -336,7 +337,8 @@ export class WorkflowEngine {
   private async executeNode(
     node: WorkflowNode,
     nodeConfigs: Map<string, NodeConfig>,
-    context: ExecutionContext
+    context: ExecutionContext,
+    incomingEdgeId?: string
   ): Promise<NodeExecutionResult> {
     const startTime = Date.now();
     const result: NodeExecutionResult = {
@@ -374,7 +376,7 @@ export class WorkflowEngine {
     result.endTime = Date.now();
     result.duration = result.endTime - startTime;
 
-    this.emit({ type: 'node:end', result });
+    this.emit({ type: 'node:end', result, incomingEdgeId });
     return result;
   }
 

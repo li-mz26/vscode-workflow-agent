@@ -1,0 +1,21 @@
+{
+  "branches": [
+    {
+      "id": "branch_high",
+      "name": "高风险",
+      "condition": "data.alert.severity_score >= 80"
+    },
+    {
+      "id": "branch_medium",
+      "name": "中风险",
+      "condition": "data.alert.severity_score >= 50"
+    },
+    {
+      "id": "branch_low",
+      "name": "低风险",
+      "condition": "true"
+    }
+  ],
+  "defaultBranch": "branch_low",
+  "evaluationMode": "first-match"
+}

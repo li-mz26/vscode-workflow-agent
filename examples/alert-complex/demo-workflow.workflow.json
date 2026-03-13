@@ -1,0 +1,272 @@
+{
+  "id": "wf_demo_001",
+  "name": "demo-workflow",
+  "description": "示例工作流 - 数据处理与条件分支",
+  "version": "1.0.0",
+  "nodes": [
+    {
+      "id": "start",
+      "type": "start",
+      "position": {
+        "x": 20,
+        "y": 120
+      },
+      "metadata": {
+        "name": "开始",
+        "description": ""
+      }
+    },
+    {
+      "id": "end",
+      "type": "end",
+      "position": {
+        "x": 1420,
+        "y": 120
+      },
+      "metadata": {
+        "name": "结束",
+        "description": ""
+      }
+    },
+    {
+      "id": "format_input",
+      "type": "code",
+      "position": {
+        "x": 220,
+        "y": 120
+      },
+      "metadata": {
+        "name": "告警格式化",
+        "description": ""
+      },
+      "configRef": "nodes/format_input_code.py"
+    },
+    {
+      "id": "enrich_alert",
+      "type": "code",
+      "position": {
+        "x": 420,
+        "y": 120
+      },
+      "metadata": {
+        "name": "补全告警信息",
+        "description": ""
+      },
+      "configRef": "nodes/enrich_alert_code.py"
+    },
+    {
+      "id": "query_context",
+      "type": "code",
+      "position": {
+        "x": 620,
+        "y": 120
+      },
+      "metadata": {
+        "name": "查询关联信息",
+        "description": ""
+      },
+      "configRef": "nodes/query_context_code.py"
+    },
+    {
+      "id": "risk_switch",
+      "type": "switch",
+      "position": {
+        "x": 820,
+        "y": 120
+      },
+      "metadata": {
+        "name": "风险分流",
+        "description": ""
+      },
+      "configRef": "nodes/risk_switch_switch.json"
+    },
+    {
+      "id": "high_process",
+      "type": "code",
+      "position": {
+        "x": 1020,
+        "y": 30
+      },
+      "metadata": {
+        "name": "高风险处理",
+        "description": ""
+      },
+      "configRef": "nodes/high_process_code.py"
+    },
+    {
+      "id": "medium_process",
+      "type": "code",
+      "position": {
+        "x": 1020,
+        "y": 120
+      },
+      "metadata": {
+        "name": "中风险处理",
+        "description": ""
+      },
+      "configRef": "nodes/medium_process_code.py"
+    },
+    {
+      "id": "low_process",
+      "type": "code",
+      "position": {
+        "x": 1020,
+        "y": 210
+      },
+      "metadata": {
+        "name": "低风险处理",
+        "description": ""
+      },
+      "configRef": "nodes/low_process_code.py"
+    },
+    {
+      "id": "final_output",
+      "type": "code",
+      "position": {
+        "x": 1220,
+        "y": 120
+      },
+      "metadata": {
+        "name": "输出格式化",
+        "description": ""
+      },
+      "configRef": "nodes/final_output_code.py"
+    }
+  ],
+  "edges": [
+    {
+      "id": "edge_1773393429990",
+      "source": {
+        "nodeId": "start",
+        "portId": "output"
+      },
+      "target": {
+        "nodeId": "format_input",
+        "portId": "input"
+      }
+    },
+    {
+      "id": "edge_1773393429997",
+      "source": {
+        "nodeId": "format_input",
+        "portId": "output"
+      },
+      "target": {
+        "nodeId": "enrich_alert",
+        "portId": "input"
+      }
+    },
+    {
+      "id": "edge_1773393430007",
+      "source": {
+        "nodeId": "enrich_alert",
+        "portId": "output"
+      },
+      "target": {
+        "nodeId": "query_context",
+        "portId": "input"
+      }
+    },
+    {
+      "id": "edge_1773393430013",
+      "source": {
+        "nodeId": "query_context",
+        "portId": "output"
+      },
+      "target": {
+        "nodeId": "risk_switch",
+        "portId": "input"
+      }
+    },
+    {
+      "id": "e_branch_high",
+      "source": {
+        "nodeId": "risk_switch",
+        "portId": "output"
+      },
+      "target": {
+        "nodeId": "high_process",
+        "portId": "input"
+      },
+      "branchId": "branch_high"
+    },
+    {
+      "id": "e_branch_medium",
+      "source": {
+        "nodeId": "risk_switch",
+        "portId": "output"
+      },
+      "target": {
+        "nodeId": "medium_process",
+        "portId": "input"
+      },
+      "branchId": "branch_medium"
+    },
+    {
+      "id": "e_branch_low",
+      "source": {
+        "nodeId": "risk_switch",
+        "portId": "output"
+      },
+      "target": {
+        "nodeId": "low_process",
+        "portId": "input"
+      },
+      "branchId": "branch_low"
+    },
+    {
+      "id": "edge_1773393430033",
+      "source": {
+        "nodeId": "high_process",
+        "portId": "output"
+      },
+      "target": {
+        "nodeId": "final_output",
+        "portId": "input"
+      }
+    },
+    {
+      "id": "edge_1773393430038",
+      "source": {
+        "nodeId": "medium_process",
+        "portId": "output"
+      },
+      "target": {
+        "nodeId": "final_output",
+        "portId": "input"
+      }
+    },
+    {
+      "id": "edge_1773393430043",
+      "source": {
+        "nodeId": "low_process",
+        "portId": "output"
+      },
+      "target": {
+        "nodeId": "final_output",
+        "portId": "input"
+      }
+    },
+    {
+      "id": "edge_1773393430049",
+      "source": {
+        "nodeId": "final_output",
+        "portId": "output"
+      },
+      "target": {
+        "nodeId": "end",
+        "portId": "input"
+      }
+    }
+  ],
+  "metadata": {
+    "author": "demo",
+    "createdAt": "2026-03-12T00:00:00.000Z",
+    "updatedAt": "2026-03-13T09:17:10.050Z",
+    "tags": [
+      "demo",
+      "example",
+      "branch"
+    ]
+  }
+}

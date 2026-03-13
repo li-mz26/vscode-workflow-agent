@@ -177,10 +177,43 @@ export class WorkflowEditorProvider implements vscode.CustomEditorProvider<Workf
           // 运行工作流
           await this.runWorkflow(document, webviewPanel.webview);
           break;
+
+        case 'openConfigFile':
+          await this.openNodeConfigFile(document, message.nodeId);
+          break;
       }
     });
   }
 
+
+  private async openNodeConfigFile(document: WorkflowDocument, nodeId: string): Promise<void> {
+    const node = document.workflow.nodes.find(n => n.id === nodeId);
+    if (!node) {
+      vscode.window.showErrorMessage(`未找到节点: ${nodeId}`);
+      return;
+    }
+
+    const config = document.nodeConfigs.get(nodeId);
+    let configRef = node.configRef;
+
+    if (!configRef && config) {
+      const ext = getConfigExtension(node.type as NodeType, config);
+      configRef = `nodes/${node.id}_${node.type}${ext}`;
+    }
+
+    if (!configRef) {
+      vscode.window.showWarningMessage(`节点 ${node.metadata?.name || nodeId} 没有关联配置文件。`);
+      return;
+    }
+
+    const configUri = vscode.Uri.file(path.join(document.workflowDir, configRef));
+    try {
+      const doc = await vscode.workspace.openTextDocument(configUri);
+      await vscode.window.showTextDocument(doc, { preview: false });
+    } catch (error) {
+      vscode.window.showErrorMessage(`打开配置文件失败: ${error}`);
+    }
+  }
   private async saveDocument(document: WorkflowDocument): Promise<void> {
     const result = await WorkflowLoader.saveToDirectory(
       document.workflowDir,
@@ -337,7 +370,9 @@ export class WorkflowEditorProvider implements vscode.CustomEditorProvider<Workf
           type: 'nodeStatus', 
           nodeId: result.nodeId, 
           status: result.status,
-          edgeId: findEdgeEndingAt(document.workflow, result.nodeId)
+          edgeId: event.incomingEdgeId ?? findEdgeEndingAt(document.workflow, result.nodeId),
+          input: result.input,
+          output: result.output
         });
       } else if (event.type === 'workflow:end') {
         webview.postMessage({ 
@@ -802,6 +837,49 @@ export class WorkflowEditorProvider implements vscode.CustomEditorProvider<Workf
     }
     .btn-danger:hover { background: #b71c1c; }
     
+
+    .prop-tabs {
+      display: flex;
+      gap: 4px;
+      margin-bottom: 12px;
+    }
+    .prop-tab {
+      flex: 1;
+      padding: 6px 8px;
+      background: var(--vscode-editorGroupHeader-tabsBackground);
+      border: 1px solid var(--vscode-sideBar-border);
+      color: var(--vscode-descriptionForeground);
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 12px;
+    }
+    .prop-tab.active {
+      color: var(--vscode-foreground);
+      border-color: var(--vscode-focusBorder);
+      background: var(--vscode-editorWidget-background);
+    }
+    .prop-section { display: none; }
+    .prop-section.active { display: block; }
+    .config-file-link {
+      color: var(--vscode-textLink-foreground);
+      text-decoration: underline;
+      cursor: pointer;
+      font-size: 12px;
+    }
+    .io-block {
+      background: var(--vscode-editor-background);
+      border: 1px solid var(--vscode-sideBar-border);
+      border-radius: 4px;
+      padding: 8px;
+      font-size: 12px;
+      line-height: 1.4;
+      white-space: pre-wrap;
+      word-break: break-word;
+      font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+      max-height: 220px;
+      overflow: auto;
+    }
+
     .config-section {
       margin-top: 15px;
       padding-top: 15px;
@@ -1056,6 +1134,7 @@ export class WorkflowEditorProvider implements vscode.CustomEditorProvider<Workf
     let history = new HistoryManager(50);
     let executionStatus = {}; // 节点执行状态
     let executedEdges = new Set(); // 已执行的边
+    let nodeExecutionData = {}; // 最近一次运行的节点输入输出
     
     let scale = 1;
     let offset = { x: 0, y: 0 };
@@ -1121,6 +1200,7 @@ export class WorkflowEditorProvider implements vscode.CustomEditorProvider<Workf
         case 'executionStart':
           // 重置所有节点状态为 pending
           executionStatus = {};
+          nodeExecutionData = {};
           message.nodeIds.forEach(id => {
             executionStatus[id] = 'pending';
           });
@@ -1131,11 +1211,18 @@ export class WorkflowEditorProvider implements vscode.CustomEditorProvider<Workf
         case 'nodeStatus':
           // 更新节点状态
           executionStatus[message.nodeId] = message.status;
+          nodeExecutionData[message.nodeId] = {
+            input: message.input,
+            output: message.output
+          };
           if (message.edgeId) {
             executedEdges.add(message.edgeId);
           }
           renderNodes();
           renderEdges();
+          if (selectedNode && selectedNode.id === message.nodeId) {
+            showProperties(selectedNode);
+          }
           break;
         case 'executionEnd':
           // 执行结束
@@ -1392,7 +1479,7 @@ export class WorkflowEditorProvider implements vscode.CustomEditorProvider<Workf
             );
             
             if (!exists) {
-              const edge: any = {
+              const edge = {
                 id: 'edge_' + Date.now(),
                 source: { nodeId: connectingPort.nodeId, portId: 'output' },
                 target: { nodeId: targetNodeId, portId: 'input' }
@@ -1519,6 +1606,30 @@ export class WorkflowEditorProvider implements vscode.CustomEditorProvider<Workf
     }
     
     // ========== 渲染 ==========
+    function getBranchNodeHeight(branches) {
+      const minHeight = 100;
+      const headerAndBodyHeight = 56;
+      const perBranchHeight = 24;
+      return Math.max(minHeight, headerAndBodyHeight + branches.length * perBranchHeight);
+    }
+
+    function getNodeHeight(node) {
+      if (node.type === 'switch' && node.detail?.branches) {
+        return getBranchNodeHeight(node.detail.branches);
+      }
+      if (node.type === 'parallel' && node.detail?.parallelBranches) {
+        return getBranchNodeHeight(node.detail.parallelBranches);
+      }
+      return 80;
+    }
+
+    function getBranchPortTopOffset(branches, branchIndex, nodeHeight) {
+      const topPadding = 20;
+      const availableHeight = Math.max(20, nodeHeight - topPadding * 2);
+      const step = availableHeight / (branches.length + 1);
+      return topPadding + step * (branchIndex + 1);
+    }
+
     function render() {
       renderNodes();
       renderEdges();
@@ -1534,25 +1645,22 @@ export class WorkflowEditorProvider implements vscode.CustomEditorProvider<Workf
           'failed': '✗',
           'pending': '○'
         }[status] || '';
+        const nodeHeight = getNodeHeight(node);
         
         // 生成输出端口
         let outputPorts = '';
         if (node.type === 'switch' && node.detail?.branches) {
           // switch 节点显示多个分支端口
           const branches = node.detail.branches;
-          const portHeight = 100; // 节点高度
-          const step = portHeight / (branches.length + 1);
           outputPorts = branches.map((branch, i) => {
-            const topOffset = 20 + step * (i + 1);
+            const topOffset = getBranchPortTopOffset(branches, i, nodeHeight);
             return '<div class="port port-output port-branch" data-port="output" data-branch-id="' + branch.id + '" style="top: ' + topOffset + 'px;" title="' + branch.name + ': ' + branch.condition + '"></div>';
           }).join('');
         } else if (node.type === 'parallel' && node.detail?.parallelBranches) {
           // parallel 节点显示多个分支端口
           const branches = node.detail.parallelBranches;
-          const portHeight = 100;
-          const step = portHeight / (branches.length + 1);
           outputPorts = branches.map((branch, i) => {
-            const topOffset = 20 + step * (i + 1);
+            const topOffset = getBranchPortTopOffset(branches, i, nodeHeight);
             return '<div class="port port-output port-branch" data-port="output" data-branch-id="' + branch.id + '" style="top: ' + topOffset + 'px;" title="' + branch.name + '"></div>';
           }).join('');
         } else if (node.type !== 'end') {
@@ -1562,7 +1670,7 @@ export class WorkflowEditorProvider implements vscode.CustomEditorProvider<Workf
         
         return '<div class="node node-type-' + node.type + ' ' + (selectedNode?.id === node.id ? 'selected' : '') + ' ' + statusClass + '" ' +
              'data-id="' + node.id + '" ' +
-             'style="left: ' + node.position.x + 'px; top: ' + node.position.y + 'px;">' +
+             'style="left: ' + node.position.x + 'px; top: ' + node.position.y + 'px; min-height: ' + nodeHeight + 'px;">' +
           '<div class="node-status-badge ' + (status || '') + '">' + statusIcon + '</div>' +
           '<div class="node-header">' +
             '<span class="node-type-icon">' + getNodeIcon(node.type) + '</span>' +
@@ -1581,24 +1689,24 @@ export class WorkflowEditorProvider implements vscode.CustomEditorProvider<Workf
         const sourceNode = workflow.nodes.find(n => n.id === edge.source.nodeId);
         const targetNode = workflow.nodes.find(n => n.id === edge.target.nodeId);
         if (!sourceNode || !targetNode) return '';
+        const sourceNodeHeight = getNodeHeight(sourceNode);
+        const targetNodeHeight = getNodeHeight(targetNode);
         
         // 计算源端口位置
         let x1 = sourceNode.position.x + 150;
-        let y1 = sourceNode.position.y + 40;
+        let y1 = sourceNode.position.y + sourceNodeHeight / 2;
         
         // 如果有 branchId，计算分支端口位置
         if (edge.branchId && (sourceNode.type === 'switch' || sourceNode.type === 'parallel')) {
           const branches = sourceNode.detail?.branches || sourceNode.detail?.parallelBranches || [];
           const branchIndex = branches.findIndex(b => b.id === edge.branchId);
           if (branchIndex >= 0) {
-            const portHeight = 100;
-            const step = portHeight / (branches.length + 1);
-            y1 = sourceNode.position.y + 20 + step * (branchIndex + 1);
+            y1 = sourceNode.position.y + getBranchPortTopOffset(branches, branchIndex, sourceNodeHeight);
           }
         }
         
         const x2 = targetNode.position.x;
-        const y2 = targetNode.position.y + 40;
+        const y2 = targetNode.position.y + targetNodeHeight / 2;
         
         const isActive = executedEdges.has(edge.id) ? 'active' : '';
         return '<path class="' + isActive + '" data-edge-id="' + edge.id + '" d="M ' + x1 + ' ' + y1 + ' C ' + (x1 + 50) + ' ' + y1 + ', ' + (x2 - 50) + ' ' + y2 + ', ' + x2 + ' ' + y2 + '" stroke-linecap="round"/>';
@@ -1653,6 +1761,7 @@ export class WorkflowEditorProvider implements vscode.CustomEditorProvider<Workf
     function showProperties(node) {
       const config = nodeConfigs[node.id] || {};
       const panel = document.getElementById('properties-content');
+      const executionData = nodeExecutionData[node.id] || {};
       
       let configHtml = '';
       switch (node.type) {
@@ -1701,30 +1810,65 @@ export class WorkflowEditorProvider implements vscode.CustomEditorProvider<Workf
           \`;
           break;
       }
+
+      const configRef = node.configRef || '';
+      const inputText = executionData.input === undefined
+        ? '暂无运行输入'
+        : JSON.stringify(executionData.input, null, 2);
+      const outputText = executionData.output === undefined
+        ? '暂无运行输出'
+        : JSON.stringify(executionData.output, null, 2);
       
       panel.innerHTML = \`
-        <div class="property-group">
-          <label>ID</label>
-          <input type="text" value="\${node.id}" disabled>
+        <div class="prop-tabs">
+          <button class="prop-tab active" data-prop-tab="basic">属性</button>
+          <button class="prop-tab" data-prop-tab="input">输入</button>
+          <button class="prop-tab" data-prop-tab="output">输出</button>
         </div>
-        <div class="property-group">
-          <label>名称</label>
-          <input type="text" id="prop-name" value="\${node.metadata.name}">
-        </div>
-        <div class="property-group">
-          <label>描述</label>
-          <textarea id="prop-desc" rows="2">\${node.metadata.description || ''}</textarea>
-        </div>
-        <div class="property-group">
-          <label>位置</label>
-          <div style="display: flex; gap: 10px;">
-            <input type="number" id="prop-x" value="\${Math.round(node.position.x)}" style="width: 50%">
-            <input type="number" id="prop-y" value="\${Math.round(node.position.y)}" style="width: 50%">
+
+        <div class="prop-section active" data-prop-section="basic">
+          <div class="property-group">
+            <label>ID</label>
+            <input type="text" value="\${node.id}" disabled>
           </div>
+          <div class="property-group">
+            <label>类型</label>
+            <input type="text" value="\${node.type}" disabled>
+          </div>
+          <div class="property-group">
+            <label>名称</label>
+            <input type="text" id="prop-name" value="\${node.metadata.name}">
+          </div>
+          <div class="property-group">
+            <label>描述</label>
+            <textarea id="prop-desc" rows="2">\${node.metadata.description || ''}</textarea>
+          </div>
+          <div class="property-group">
+            <label>配置文件</label>
+            \${configRef
+              ? \`<a class="config-file-link" id="open-config-file" title="打开 \${configRef}">\${configRef}</a>\`
+              : '<span style="font-size:12px; color: var(--vscode-descriptionForeground);">未关联配置文件</span>'}
+          </div>
+          \${configHtml}
+          <button class="btn-danger" id="btn-delete-node">🗑️ 删除节点</button>
         </div>
-        \${configHtml}
-        <button class="btn-danger" id="btn-delete-node">🗑️ 删除节点</button>
+
+        <div class="prop-section" data-prop-section="input">
+          <div class="io-block">\${escapeHtml(inputText)}</div>
+        </div>
+
+        <div class="prop-section" data-prop-section="output">
+          <div class="io-block">\${escapeHtml(outputText)}</div>
+        </div>
       \`;
+
+      panel.querySelectorAll('.prop-tab').forEach(tab => {
+        tab.addEventListener('click', () => {
+          const tabName = tab.dataset.propTab;
+          panel.querySelectorAll('.prop-tab').forEach(t => t.classList.toggle('active', t.dataset.propTab === tabName));
+          panel.querySelectorAll('.prop-section').forEach(section => section.classList.toggle('active', section.dataset.propSection === tabName));
+        });
+      });
       
       // 属性修改事件 - 实时更新 JSON
       document.getElementById('prop-name').addEventListener('input', e => {
@@ -1746,24 +1890,26 @@ export class WorkflowEditorProvider implements vscode.CustomEditorProvider<Workf
       document.getElementById('prop-desc').addEventListener('change', e => {
         pushHistory('修改节点描述');
       });
-      
-      document.getElementById('prop-x').addEventListener('change', e => {
-        node.position.x = parseInt(e.target.value) || 0;
-        render();
-        updateJsonEditor();
-        pushHistory('修改节点位置');
-      });
-      
-      document.getElementById('prop-y').addEventListener('change', e => {
-        node.position.y = parseInt(e.target.value) || 0;
-        render();
-        updateJsonEditor();
-        pushHistory('修改节点位置');
-      });
+
+      const openConfigFileBtn = document.getElementById('open-config-file');
+      if (openConfigFileBtn) {
+        openConfigFileBtn.addEventListener('click', () => {
+          vscode.postMessage({ type: 'openConfigFile', nodeId: node.id });
+        });
+      }
       
       document.getElementById('btn-delete-node').addEventListener('click', () => deleteNode(node.id));
     }
-    
+
+    function escapeHtml(text) {
+      return String(text)
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;')
+        .replaceAll('"', '&quot;')
+        .replaceAll("'", '&#39;');
+    }
+
     function showEmptyProperties() {
       document.getElementById('properties-content').innerHTML = 
         '<p style="color: var(--vscode-descriptionForeground); font-size: 12px;">选择一个节点查看其属性</p>';

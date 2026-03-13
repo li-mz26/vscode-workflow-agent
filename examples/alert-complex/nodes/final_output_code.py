@@ -1,0 +1,3 @@
+def main(input):
+    alert=input.get("alert",{})
+    return {"final_alert":{"alert_id":alert.get("alert_id"),"title":alert.get("title"),"severity":alert.get("severity"),"severity_score":alert.get("severity_score"),"service":alert.get("context",{}).get("service"),"region":alert.get("context",{}).get("region"),"owner":alert.get("owner"),"action_level":alert.get("decision",{}).get("level"),"action":alert.get("decision",{}).get("action")}}

@@ -17,7 +17,10 @@
   "activationEvents": [
     "onCommand:workflowAgent.openWorkflow",
     "onCommand:workflowAgent.createWorkflow",
-    "workspaceContains:**/*.workflow.json"
+    "workspaceContains:**/*.workflow.json",
+    "onView:workflowAgent.mcpPanel",
+    "onCommand:workflowAgent.mcpStart",
+    "onCommand:workflowAgent.mcpStop"
   ],
   "main": "./out/extension.js",
   "contributes": {
@@ -48,6 +51,16 @@
         "command": "workflowAgent.runWorkflow",
         "title": "Run Workflow",
         "category": "Workflow"
+      },
+      {
+        "command": "workflowAgent.mcpStart",
+        "title": "Start MCP Server",
+        "category": "Workflow"
+      },
+      {
+        "command": "workflowAgent.mcpStop",
+        "title": "Stop MCP Server",
+        "category": "Workflow"
       }
     ],
     "viewsContainers": {
@@ -62,8 +75,9 @@
     "views": {
       "workflowAgent": [
         {
-          "id": "workflowAgent.explorer",
-          "name": "Workflows"
+          "id": "workflowAgent.mcpPanel",
+          "name": "MCP Server",
+          "type": "webview"
         }
       ]
     },
