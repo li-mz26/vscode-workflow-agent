@@ -58,6 +58,31 @@ export interface WorkflowData {
 
 export type ExecutionState = 'idle' | 'running' | 'paused' | 'completed' | 'failed' | 'stopped';
 
+
+type WorkflowHistory = {
+    past: WorkflowData[];
+    future: WorkflowData[];
+    canUndo: boolean;
+    canRedo: boolean;
+};
+
+const MAX_HISTORY_LENGTH = 100;
+
+const cloneWorkflow = (workflow: WorkflowData): WorkflowData =>
+    typeof structuredClone === 'function'
+        ? structuredClone(workflow)
+        : JSON.parse(JSON.stringify(workflow));
+
+const pushHistorySnapshot = (history: WorkflowHistory, workflow: WorkflowData) => {
+    history.past.push(cloneWorkflow(workflow));
+    if (history.past.length > MAX_HISTORY_LENGTH) {
+        history.past.shift();
+    }
+    history.future = [];
+    history.canUndo = history.past.length > 0;
+    history.canRedo = false;
+};
+
 interface CanvasState {
     // Workflow data
     workflow: WorkflowData | null;
@@ -81,10 +106,7 @@ interface CanvasState {
     } | null;
     
     // History
-    history: {
-        canUndo: boolean;
-        canRedo: boolean;
-    };
+    history: WorkflowHistory;
     
     // Dragging
     draggingNode: string | null;
@@ -99,6 +121,7 @@ interface CanvasState {
     updateWorkflow: (updates: Partial<WorkflowData>) => void;
     updateNode: (nodeId: string, updates: Partial<NodeData>) => void;
     updateNodeData: (nodeId: string, data: Record<string, any>) => void;
+    beginNodeMove: () => void;
     moveNode: (nodeId: string, position: Position) => void;
     addNode: (node: NodeData) => void;
     deleteNode: (nodeId: string) => void;
@@ -115,6 +138,8 @@ interface CanvasState {
     setExecution: (execution: CanvasState['execution']) => void;
     markDirty: () => void;
     markClean: () => void;
+    undo: () => void;
+    redo: () => void;
 }
 
 export const useCanvasStore = create<CanvasState>()(
@@ -125,16 +150,17 @@ export const useCanvasStore = create<CanvasState>()(
         selectedNodes: [],
         selectedEdges: [],
         execution: null,
-        history: { canUndo: false, canRedo: false },
+        history: { past: [], future: [], canUndo: false, canRedo: false },
         draggingNode: null,
         dragOffset: { x: 0, y: 0 },
         connectingFrom: null,
         mousePosition: { x: 0, y: 0 },
         
-        setWorkflow: (workflow) => set({ workflow, isDirty: false }),
+        setWorkflow: (workflow) => set({ workflow, isDirty: false, history: { past: [], future: [], canUndo: false, canRedo: false } }),
         
         updateWorkflow: (updates) => set((state) => {
             if (state.workflow) {
+                pushHistorySnapshot(state.history, state.workflow);
                 Object.assign(state.workflow, updates);
                 state.isDirty = true;
             }
@@ -142,7 +168,8 @@ export const useCanvasStore = create<CanvasState>()(
         
         updateNode: (nodeId, updates) => set((state) => {
             const node = state.workflow?.nodes.find((n) => n.id === nodeId);
-            if (node) {
+            if (node && state.workflow) {
+                pushHistorySnapshot(state.history, state.workflow);
                 Object.assign(node, updates);
                 state.isDirty = true;
             }
@@ -150,28 +177,39 @@ export const useCanvasStore = create<CanvasState>()(
         
         updateNodeData: (nodeId, data) => set((state) => {
             const node = state.workflow?.nodes.find((n) => n.id === nodeId);
-            if (node) {
+            if (node && state.workflow) {
+                pushHistorySnapshot(state.history, state.workflow);
                 Object.assign(node.data, data);
                 state.isDirty = true;
+            }
+        }),
+
+        beginNodeMove: () => set((state) => {
+            if (state.workflow) {
+                pushHistorySnapshot(state.history, state.workflow);
             }
         }),
         
         moveNode: (nodeId, position) => set((state) => {
             const node = state.workflow?.nodes.find((n) => n.id === nodeId);
-            if (node) {
+            if (node && state.workflow) {
                 node.position = position;
                 state.isDirty = true;
             }
         }),
         
         addNode: (node) => set((state) => {
-            state.workflow?.nodes.push(node);
-            state.selectedNodes = [node.id];
-            state.isDirty = true;
+            if (state.workflow) {
+                pushHistorySnapshot(state.history, state.workflow);
+                state.workflow.nodes.push(node);
+                state.selectedNodes = [node.id];
+                state.isDirty = true;
+            }
         }),
         
         deleteNode: (nodeId) => set((state) => {
             if (state.workflow) {
+                pushHistorySnapshot(state.history, state.workflow);
                 state.workflow.nodes = state.workflow.nodes.filter((n) => n.id !== nodeId);
                 state.workflow.edges = state.workflow.edges.filter(
                     (e) => e.source.nodeId !== nodeId && e.target.nodeId !== nodeId
@@ -182,12 +220,16 @@ export const useCanvasStore = create<CanvasState>()(
         }),
         
         addEdge: (edge) => set((state) => {
-            state.workflow?.edges.push(edge);
-            state.isDirty = true;
+            if (state.workflow) {
+                pushHistorySnapshot(state.history, state.workflow);
+                state.workflow.edges.push(edge);
+                state.isDirty = true;
+            }
         }),
         
         deleteEdge: (edgeId) => set((state) => {
             if (state.workflow) {
+                pushHistorySnapshot(state.history, state.workflow);
                 state.workflow.edges = state.workflow.edges.filter((e) => e.id !== edgeId);
                 state.isDirty = true;
             }
@@ -229,6 +271,28 @@ export const useCanvasStore = create<CanvasState>()(
         setMousePosition: (pos) => set({ mousePosition: pos }),
         
         setExecution: (execution) => set({ execution }),
+
+        undo: () => set((state) => {
+            if (!state.workflow || state.history.past.length === 0) return;
+            const previous = state.history.past.pop();
+            if (!previous) return;
+            state.history.future.unshift(cloneWorkflow(state.workflow));
+            state.workflow = cloneWorkflow(previous);
+            state.history.canUndo = state.history.past.length > 0;
+            state.history.canRedo = state.history.future.length > 0;
+            state.isDirty = true;
+        }),
+
+        redo: () => set((state) => {
+            if (!state.workflow || state.history.future.length === 0) return;
+            const next = state.history.future.shift();
+            if (!next) return;
+            state.history.past.push(cloneWorkflow(state.workflow));
+            state.workflow = cloneWorkflow(next);
+            state.history.canUndo = state.history.past.length > 0;
+            state.history.canRedo = state.history.future.length > 0;
+            state.isDirty = true;
+        }),
         
         markDirty: () => set({ isDirty: true }),
         markClean: () => set({ isDirty: false })

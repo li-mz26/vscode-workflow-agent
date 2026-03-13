@@ -6,6 +6,12 @@ import { Toolbar } from './components/Toolbar';
 import { useCanvasStore } from './stores/canvasStore';
 import { NodeRegistry } from '../../src/core/node/NodeRegistry';
 
+declare function acquireVsCodeApi(): {
+    postMessage(message: unknown): void;
+    getState(): unknown;
+    setState(newState: unknown): void;
+};
+
 const vscode = acquireVsCodeApi();
 const nodeRegistry = new NodeRegistry();
 
@@ -35,8 +41,33 @@ function App() {
     const [viewMode, setViewMode] = useState<ViewMode>('visual');
     const [jsonContent, setJsonContent] = useState<string>('');
     const [jsonError, setJsonError] = useState<string | null>(null);
-    const { workflow, setWorkflow, addNode, deleteNode, markClean } = useCanvasStore();
+    const { workflow, setWorkflow, addNode, deleteNode, markClean, undo, redo } = useCanvasStore();
     const deleteZoneRef = useRef<HTMLDivElement>(null);
+
+    const getCurrentWorkflow = useCallback(() => useCanvasStore.getState().workflow, []);
+    const getNodeTypeById = useCallback((nodeId: string) => {
+        const currentWorkflow = getCurrentWorkflow();
+        return currentWorkflow?.nodes.find(n => n.id === nodeId)?.type;
+    }, [getCurrentWorkflow]);
+
+
+    const deleteNodeAndSync = useCallback((nodeId: string) => {
+        const nodeType = getNodeTypeById(nodeId);
+        if (!nodeType) return;
+
+        deleteNode(nodeId);
+        const nextWorkflow = getCurrentWorkflow();
+        if (nextWorkflow) {
+            vscode.postMessage({
+                type: 'node:delete',
+                payload: {
+                    workflow: nextWorkflow,
+                    nodeId,
+                    nodeType
+                }
+            });
+        }
+    }, [deleteNode, getCurrentWorkflow, getNodeTypeById]);
     
     // Load workflow from VSCode
     useEffect(() => {
@@ -136,39 +167,26 @@ function App() {
     // Handle drop on delete zone
     const handleDeleteZoneDrop = useCallback((e: React.DragEvent) => {
         e.preventDefault();
-        if (draggedNodeId && workflow) {
-            const node = workflow.nodes.find(n => n.id === draggedNodeId);
-            if (node) {
-                deleteNode(draggedNodeId);
-                vscode.postMessage({
-                    type: 'node:delete',
-                    payload: { 
-                        workflow,
-                        nodeId: draggedNodeId,
-                        nodeType: node.type
-                    }
-                });
-            }
+        if (draggedNodeId) {
+            deleteNodeAndSync(draggedNodeId);
         }
         setIsDeleteZoneActive(false);
         setDraggedNodeId(null);
         delete (window as any).__isNewNode;
-    }, [draggedNodeId, workflow, deleteNode]);
+    }, [draggedNodeId, deleteNodeAndSync]);
     
     // Handle drop on canvas
     const handleCanvasDrop = useCallback((e: React.DragEvent) => {
         e.preventDefault();
-        const type = (window as any).__draggedNodeType;
-        const isNewNode = (window as any).__isNewNode;
-        
-        // 如果是从画布拖拽的节点，不做处理（已由 delete zone 处理）
-        if (!isNewNode) {
+        const typeFromDataTransfer = e.dataTransfer.getData('application/x-workflow-node-type')
+            || e.dataTransfer.getData('text/plain');
+        const type = typeFromDataTransfer || (window as any).__draggedNodeType;
+
+        if (!type) {
             setDraggedNodeId(null);
             delete (window as any).__isNewNode;
             return;
         }
-        
-        if (!type) return;
         
         const rect = e.currentTarget.getBoundingClientRect();
         const x = (e.clientX - rect.left - 100);
@@ -176,15 +194,18 @@ function App() {
         
         const node = nodeRegistry.createNode(type, { x, y });
         addNode(node);
-        
-        vscode.postMessage({
-            type: 'node:add',
-            payload: { workflow, node }
-        });
+
+        const nextWorkflow = getCurrentWorkflow();
+        if (nextWorkflow) {
+            vscode.postMessage({
+                type: 'node:add',
+                payload: { workflow: nextWorkflow, node }
+            });
+        }
         
         delete (window as any).__draggedNodeType;
         delete (window as any).__isNewNode;
-    }, [addNode, workflow]);
+    }, [addNode, getCurrentWorkflow]);
     
     // Handle save
     const handleSave = useCallback(() => {
@@ -229,18 +250,7 @@ function App() {
                     e.clientY <= deleteZoneRect.bottom;
 
                 if (isInDeleteZone) {
-                    const node = workflow?.nodes.find(n => n.id === draggedNodeId);
-                    if (node) {
-                        deleteNode(draggedNodeId);
-                        vscode.postMessage({
-                            type: 'node:delete',
-                            payload: {
-                                workflow,
-                                nodeId: draggedNodeId,
-                                nodeType: node.type
-                            }
-                        });
-                    }
+                    deleteNodeAndSync(draggedNodeId);
                 }
             }
             setDraggedNodeId(null);
@@ -249,7 +259,36 @@ function App() {
 
         window.addEventListener('mouseup', handleGlobalMouseUp);
         return () => window.removeEventListener('mouseup', handleGlobalMouseUp);
-    }, [draggedNodeId, workflow, deleteNode]);
+    }, [draggedNodeId, deleteNodeAndSync]);
+
+
+    const canUndo = useCanvasStore(state => state.history.canUndo);
+    const canRedo = useCanvasStore(state => state.history.canRedo);
+
+    useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            const isModifierPressed = e.ctrlKey || e.metaKey;
+            if (!isModifierPressed) return;
+
+            if (e.key.toLowerCase() === 'z' && !e.shiftKey) {
+                e.preventDefault();
+                undo();
+                return;
+            }
+
+            const isRedo =
+                (e.key.toLowerCase() === 'y') ||
+                (e.key.toLowerCase() === 'z' && e.shiftKey);
+
+            if (isRedo) {
+                e.preventDefault();
+                redo();
+            }
+        };
+
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [undo, redo]);
 
     return (
         <div style={{
@@ -266,6 +305,10 @@ function App() {
                 onDebug={handleDebug}
                 isRunning={executionState?.status === 'running'}
                 canSave={useCanvasStore(state => state.isDirty)}
+                canUndo={canUndo}
+                canRedo={canRedo}
+                onUndo={undo}
+                onRedo={redo}
             />
             
             {/* 视图切换按钮 */}
@@ -373,19 +416,8 @@ function App() {
                                             clientY >= rect.top &&
                                             clientY <= rect.bottom;
                                         
-                                        if (isInDeleteZone && workflow) {
-                                            const node = workflow.nodes.find(n => n.id === nodeId);
-                                            if (node) {
-                                                deleteNode(nodeId);
-                                                vscode.postMessage({
-                                                    type: 'node:delete',
-                                                    payload: {
-                                                        workflow,
-                                                        nodeId,
-                                                        nodeType: node.type
-                                                    }
-                                                });
-                                            }
+                                        if (isInDeleteZone) {
+                                            deleteNodeAndSync(nodeId);
                                         }
                                     }
                                     setIsDeleteZoneActive(false);

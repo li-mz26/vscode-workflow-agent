@@ -5,6 +5,10 @@ interface ToolbarProps {
     onRun: () => void;
     onDebug: () => void;
     canSave: boolean;
+    canUndo: boolean;
+    canRedo: boolean;
+    onUndo: () => void;
+    onRedo: () => void;
     isRunning?: boolean;
 }
 
@@ -13,6 +17,10 @@ export const Toolbar: React.FC<ToolbarProps> = ({
     onRun,
     onDebug,
     canSave,
+    canUndo,
+    canRedo,
+    onUndo,
+    onRedo,
     isRunning = false
 }) => {
     return (
@@ -48,7 +56,52 @@ export const Toolbar: React.FC<ToolbarProps> = ({
             </button>
             
             <div style={{ width: '1px', height: '20px', background: 'var(--vscode-panel-border)' }} />
-            
+
+            <button
+                onClick={onUndo}
+                disabled={!canUndo}
+                title="撤销 (Ctrl/Cmd+Z)"
+                style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '4px',
+                    padding: '6px 12px',
+                    background: canUndo
+                        ? 'var(--vscode-button-secondaryBackground)'
+                        : 'var(--vscode-button-secondaryBackground)',
+                    color: 'var(--vscode-button-secondaryForeground)',
+                    border: 'none',
+                    borderRadius: '4px',
+                    cursor: canUndo ? 'pointer' : 'not-allowed',
+                    fontSize: '13px',
+                    opacity: canUndo ? 1 : 0.6
+                }}
+            >
+                ↶ 撤销
+            </button>
+
+            <button
+                onClick={onRedo}
+                disabled={!canRedo}
+                title="重做 (Ctrl/Cmd+Y / Ctrl/Cmd+Shift+Z)"
+                style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '4px',
+                    padding: '6px 12px',
+                    background: 'var(--vscode-button-secondaryBackground)',
+                    color: 'var(--vscode-button-secondaryForeground)',
+                    border: 'none',
+                    borderRadius: '4px',
+                    cursor: canRedo ? 'pointer' : 'not-allowed',
+                    fontSize: '13px',
+                    opacity: canRedo ? 1 : 0.6
+                }}
+            >
+                ↷ 重做
+            </button>
+
+            <div style={{ width: '1px', height: '20px', background: 'var(--vscode-panel-border)' }} />
             <button
                 onClick={onRun}
                 disabled={isRunning}
