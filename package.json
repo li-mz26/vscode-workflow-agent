@@ -76,7 +76,8 @@
       "workflowAgent": [
         {
           "id": "workflowAgent.mcpPanel",
-          "name": "MCP Server"
+          "name": "MCP Server",
+          "type": "webview"
         }
       ]
     },
