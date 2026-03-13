@@ -1392,7 +1392,7 @@ export class WorkflowEditorProvider implements vscode.CustomEditorProvider<Workf
             );
             
             if (!exists) {
-              const edge: any = {
+              const edge = {
                 id: 'edge_' + Date.now(),
                 source: { nodeId: connectingPort.nodeId, portId: 'output' },
                 target: { nodeId: targetNodeId, portId: 'input' }
