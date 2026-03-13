@@ -449,7 +449,22 @@ export class WorkflowMCPServer {
   async runHttp(host: string, port: number): Promise<void> {
     let sseTransport: SSEServerTransport | undefined;
 
+    const setCorsHeaders = (res: http.ServerResponse) => {
+      res.setHeader('Access-Control-Allow-Origin', '*');
+      res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
+      res.setHeader('Access-Control-Allow-Headers', 'content-type, mcp-session-id');
+      res.setHeader('Access-Control-Max-Age', '86400');
+    };
+
     const httpServer = http.createServer(async (req, res) => {
+      setCorsHeaders(res);
+
+      if (req.method === 'OPTIONS') {
+        res.writeHead(204);
+        res.end();
+        return;
+      }
+
       const reqUrl = new URL(req.url || '/', `http://${host}:${port}`);
 
       if (req.method === 'GET' && reqUrl.pathname === '/health') {
@@ -458,14 +473,14 @@ export class WorkflowMCPServer {
         return;
       }
 
-      if (req.method === 'GET' && reqUrl.pathname === '/sse') {
+      if (req.method === 'GET' && (reqUrl.pathname === '/sse' || reqUrl.pathname === '/mcp')) {
         if (sseTransport) {
           res.writeHead(409, { 'content-type': 'text/plain' });
           res.end('SSE session already established');
           return;
         }
 
-        sseTransport = new SSEServerTransport('/message', res);
+        sseTransport = new SSEServerTransport('/mcp', res);
         sseTransport.onclose = () => { sseTransport = undefined; };
         try {
           await this.server.connect(sseTransport);
@@ -480,7 +495,7 @@ export class WorkflowMCPServer {
         return;
       }
 
-      if (req.method === 'POST' && reqUrl.pathname === '/message') {
+      if (req.method === 'POST' && (reqUrl.pathname === '/message' || reqUrl.pathname === '/mcp')) {
         if (!sseTransport) {
           res.writeHead(400, { 'content-type': 'text/plain' });
           res.end('SSE session not established');
@@ -507,7 +522,7 @@ export class WorkflowMCPServer {
       httpServer.listen(port, host, () => resolve());
     });
 
-    console.error(`Workflow MCP Server running at http://${host}:${port} (GET /sse, POST /message, GET /health)`);
+    console.error(`Workflow MCP Server running at http://${host}:${port} (GET /mcp|/sse, POST /mcp|/message, GET /health, CORS enabled)`);
   }
 }
 
