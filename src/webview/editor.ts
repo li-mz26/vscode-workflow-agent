@@ -337,7 +337,7 @@ export class WorkflowEditorProvider implements vscode.CustomEditorProvider<Workf
           type: 'nodeStatus', 
           nodeId: result.nodeId, 
           status: result.status,
-          edgeId: findEdgeEndingAt(document.workflow, result.nodeId)
+          edgeId: event.incomingEdgeId ?? findEdgeEndingAt(document.workflow, result.nodeId)
         });
       } else if (event.type === 'workflow:end') {
         webview.postMessage({ 

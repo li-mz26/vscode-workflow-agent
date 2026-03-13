@@ -110,6 +110,53 @@ describe('WorkflowEngine', () => {
     expect(result.status).toBe('success');
   });
 
+
+  it('should emit correct incoming edge for merged node after switch branch', async () => {
+    const workflow: Workflow = {
+      id: 'test_wf_branch_edge',
+      name: 'test-branch-edge',
+      version: '1.0.0',
+      nodes: [
+        { id: 'start', type: 'start', position: { x: 0, y: 0 }, metadata: { name: 'Start' } },
+        { id: 'switch1', type: 'switch', position: { x: 100, y: 0 }, metadata: { name: 'Switch' } },
+        { id: 'high', type: 'code', position: { x: 220, y: -60 }, metadata: { name: 'High' } },
+        { id: 'low', type: 'code', position: { x: 220, y: 60 }, metadata: { name: 'Low' } },
+        { id: 'summary', type: 'end', position: { x: 360, y: 0 }, metadata: { name: 'Summary' } }
+      ],
+      edges: [
+        { id: 'e_start_switch', source: { nodeId: 'start', portId: 'output' }, target: { nodeId: 'switch1', portId: 'input' } },
+        { id: 'e_switch_high', source: { nodeId: 'switch1', portId: 'output' }, target: { nodeId: 'high', portId: 'input' }, branchId: 'high' },
+        { id: 'e_switch_low', source: { nodeId: 'switch1', portId: 'output' }, target: { nodeId: 'low', portId: 'input' }, branchId: 'low' },
+        { id: 'e_high_summary', source: { nodeId: 'high', portId: 'output' }, target: { nodeId: 'summary', portId: 'input' } },
+        { id: 'e_low_summary', source: { nodeId: 'low', portId: 'output' }, target: { nodeId: 'summary', portId: 'input' } }
+      ]
+    };
+
+    const nodeConfigs = new Map();
+    nodeConfigs.set('switch1', {
+      branches: [
+        { id: 'high', name: 'High', condition: 'data.score > 80' },
+        { id: 'low', name: 'Low', condition: 'data.score <= 80' }
+      ],
+      defaultBranch: 'low'
+    });
+    nodeConfigs.set('high', { language: 'javascript', code: 'return { path: "high" };' });
+    nodeConfigs.set('low', { language: 'javascript', code: 'return { path: "low" };' });
+
+    const endEvents: Array<{ nodeId: string; incomingEdgeId?: string }> = [];
+    engine.on(event => {
+      if (event.type === 'node:end') {
+        endEvents.push({ nodeId: event.result.nodeId, incomingEdgeId: event.incomingEdgeId });
+      }
+    });
+
+    await engine.execute(workflow, nodeConfigs, { score: 60 });
+
+    const summaryEndEvent = endEvents.find(e => e.nodeId === 'summary');
+    expect(summaryEndEvent).toBeDefined();
+    expect(summaryEndEvent?.incomingEdgeId).toBe('e_low_summary');
+  });
+
   it('should detect invalid DAG (cycle)', async () => {
     const workflow: Workflow = {
       id: 'test_wf_cycle',
