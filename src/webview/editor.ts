@@ -140,8 +140,10 @@ export class WorkflowEditorProvider implements vscode.CustomEditorProvider<Workf
     webviewPanel.webview.html = this.getHtml(webviewPanel.webview, document.workflow);
 
     webviewPanel.webview.onDidReceiveMessage(async (message) => {
+      console.log('[Extension] Received message from webview:', message.type, message);
       switch (message.type) {
         case 'ready':
+          console.log('[Extension] Sending init message with workflow:', document.workflow?.name);
           webviewPanel.webview.postMessage({
             type: 'init',
             workflow: document.workflow,
@@ -1087,10 +1089,12 @@ export class WorkflowEditorProvider implements vscode.CustomEditorProvider<Workf
     // ========== 初始化 ==========
     window.addEventListener('message', event => {
       const message = event.data;
+      console.log('[WebView] Received message:', message.type, message);
       switch (message.type) {
         case 'init':
           workflow = message.workflow;
           nodeConfigs = message.nodeConfigs || {};
+          console.log('[WebView] Init workflow:', workflow?.name, 'nodes:', workflow?.nodes?.length);
           
           // 初始化历史记录
           history.push(workflow, nodeConfigs, '初始状态');
@@ -1152,6 +1156,7 @@ export class WorkflowEditorProvider implements vscode.CustomEditorProvider<Workf
       }
     });
     
+    console.log('[WebView] Sending ready message');
     vscode.postMessage({ type: 'ready' });
     
     // ========== 历史记录操作 ==========
