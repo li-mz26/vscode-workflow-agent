@@ -100,7 +100,9 @@
     "test": "vitest",
     "package": "vsce package",
     "build:webview": "cd webview-ui && npm run build",
-    "dev:webview": "cd webview-ui && npm run dev"
+    "dev:webview": "cd webview-ui && npm run dev",
+    "start:web-console": "npm run compile && node out/web/consoleServer.js",
+    "start:node-app": "npm run compile && node out/app/nodeApp.js"
   },
   "devDependencies": {
     "@types/node": "^20.10.0",
