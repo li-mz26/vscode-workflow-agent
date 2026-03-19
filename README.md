@@ -75,6 +75,43 @@ my-workflow/
     └── node3_switch.json        # 分支配置
 ```
 
+
+## Node.js 应用版本（Web 控制台 + MCP Server）
+
+除了 VSCode 插件，你也可以直接运行一个 Node.js 应用版本：
+
+```bash
+# 同时启动 Web 控制台和后台 MCP Server
+npm run start:node-app
+```
+
+默认端口：
+
+- Web 控制台：`http://127.0.0.1:3030`
+- MCP Server：`http://127.0.0.1:3031/mcp`
+
+可选环境变量：
+
+- `WORKFLOW_WEB_HOST`：Web 控制台监听地址（默认 `127.0.0.1`）
+- `WORKFLOW_WEB_PORT`：Web 控制台端口（默认 `3030`）
+- `WORKFLOW_WEB_ROOT`：控制台允许访问的工作区根目录（默认当前目录）
+- `WORKFLOW_MCP_HOST`：MCP Server 监听地址（默认 `127.0.0.1`）
+- `WORKFLOW_MCP_PORT`：MCP Server 端口（默认 `3031`）
+- `WORKFLOW_MCP_TRANSPORT`：MCP 传输模式（默认 `streamable-http`）
+
+如果你只想启动 Web 控制台（不自动拉起 MCP Server），可继续使用：
+
+```bash
+npm run start:web-console
+```
+
+Web 控制台能力：
+
+- 扫描目录下的 `*.workflow.json` 工作流
+- 查看工作流定义和节点配置
+- 以自定义输入 JSON 直接运行工作流
+- 页面显示当前 MCP 服务地址（Node App 模式）
+
 ## 开发
 
 ```bash
