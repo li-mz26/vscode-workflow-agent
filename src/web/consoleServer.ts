@@ -2,6 +2,7 @@ import * as http from 'http';
 import * as fs from 'fs';
 import * as path from 'path';
 import { WorkflowLoader, WorkflowEngine } from '../engine';
+import { NodeConfig, Workflow } from '../engine/types';
 
 interface JsonResponse {
   success: boolean;
@@ -233,6 +234,25 @@ export async function runWorkflowConsoleServer(options: ConsoleServerOptions = {
             nodeConfigs: Object.fromEntries(result.nodeConfigs || new Map())
           }
         });
+        return;
+      }
+
+
+      if (req.method === 'POST' && requestUrl.pathname === '/api/workflows/save') {
+        const body = await readJsonBody(req);
+        if (!body.path) throw new Error('缺少 path 参数');
+        if (!body.workflow) throw new Error('缺少 workflow 参数');
+
+        const workflowPath = safeResolvePath(workspaceRoot, body.path);
+        const workflow = body.workflow as Workflow;
+        const nodeConfigs = new Map<string, NodeConfig>(Object.entries((body.nodeConfigs || {}) as Record<string, NodeConfig>));
+
+        const saveResult = await WorkflowLoader.saveToDirectory(workflowPath, workflow, nodeConfigs);
+        if (!saveResult.success) {
+          throw new Error(saveResult.error || '工作流保存失败');
+        }
+
+        sendJson(res, 200, { success: true, data: { path: workflowPath } });
         return;
       }
 
