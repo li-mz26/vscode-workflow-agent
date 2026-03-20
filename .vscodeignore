@@ -14,6 +14,5 @@ vsc-extension-quickstart.md
 package-lock.json
 *.vsix
 webview-ui/**
-# 只包含需要的 node_modules
-node_modules/**
-!node_modules/@modelcontextprotocol/**
+# 包含所有 node_modules 依赖（MCP SDK 需要多个依赖）
+# node_modules/**
