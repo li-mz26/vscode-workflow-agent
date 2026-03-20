@@ -453,6 +453,18 @@ export class WorkflowEditorProvider implements vscode.CustomEditorProvider<Workf
   <title>Workflow Editor - ${workflow.name}</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
+    :root {
+      --ui-radius-sm: 6px;
+      --ui-radius-md: 10px;
+      --ui-radius-lg: 14px;
+      --ui-shadow-soft: 0 10px 30px rgba(0, 0, 0, 0.22);
+      --ui-shadow-card: 0 6px 18px rgba(0, 0, 0, 0.16);
+      --toolbar-width: clamp(56px, 7vw, 72px);
+      --properties-width: clamp(230px, 24vw, 320px);
+      --panel-gap: clamp(8px, 1vw, 12px);
+      --n8n-accent: #ff6d3d;
+      --n8n-accent-soft: #ff8f6a;
+    }
     body { 
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
       background: var(--vscode-editor-background);
@@ -460,17 +472,31 @@ export class WorkflowEditorProvider implements vscode.CustomEditorProvider<Workf
       height: 100vh;
       overflow: hidden;
     }
-    #app { height: 100%; display: flex; flex-direction: column; }
+    #app {
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      padding: clamp(6px, 1vh, 10px);
+      gap: var(--panel-gap);
+      background:
+        radial-gradient(circle at 0% 0%, color-mix(in srgb, var(--n8n-accent) 14%, transparent) 0%, transparent 35%),
+        radial-gradient(circle at 100% 100%, color-mix(in srgb, #7d6bff 12%, transparent) 0%, transparent 40%),
+        var(--vscode-editor-background);
+    }
     
     /* 视图切换标签 */
     .view-tabs {
       display: flex;
-      background: var(--vscode-editorGroupHeader-tabsBackground);
-      border-bottom: 1px solid var(--vscode-editorGroupHeader-tabsBorder);
-      padding: 0 10px;
+      background: color-mix(in srgb, var(--vscode-editorWidget-background) 86%, transparent);
+      border: 1px solid color-mix(in srgb, var(--vscode-panel-border) 75%, transparent);
+      border-radius: var(--ui-radius-lg);
+      padding: 6px;
+      gap: 4px;
+      box-shadow: var(--ui-shadow-card);
+      align-items: center;
     }
     .view-tab {
-      padding: 8px 16px;
+      padding: 7px 14px;
       cursor: pointer;
       border-bottom: 2px solid transparent;
       color: var(--vscode-descriptionForeground);
@@ -478,11 +504,18 @@ export class WorkflowEditorProvider implements vscode.CustomEditorProvider<Workf
       display: flex;
       align-items: center;
       gap: 6px;
+      border-radius: 999px;
+      border: 1px solid transparent;
+      transition: background 0.2s, color 0.2s, border-color 0.2s;
     }
-    .view-tab:hover { color: var(--vscode-foreground); }
+    .view-tab:hover {
+      color: var(--vscode-foreground);
+      background: color-mix(in srgb, var(--vscode-button-background) 16%, transparent);
+    }
     .view-tab.active {
       color: var(--vscode-foreground);
-      border-bottom-color: var(--vscode-button-background);
+      border-color: color-mix(in srgb, var(--n8n-accent) 55%, var(--vscode-panel-border) 45%);
+      background: color-mix(in srgb, var(--n8n-accent) 20%, transparent);
     }
     .view-tab .icon { font-size: 14px; }
     
@@ -497,10 +530,11 @@ export class WorkflowEditorProvider implements vscode.CustomEditorProvider<Workf
       background: transparent;
       color: var(--vscode-foreground);
       border: 1px solid var(--vscode-button-border);
-      border-radius: 3px;
+      border-radius: 999px;
       cursor: pointer;
       font-size: 12px;
       opacity: 0.7;
+      transition: opacity 0.15s, background 0.15s, border-color 0.15s;
     }
     .history-btn:hover:not(:disabled) {
       opacity: 1;
@@ -516,35 +550,47 @@ export class WorkflowEditorProvider implements vscode.CustomEditorProvider<Workf
       flex: 1;
       display: flex;
       overflow: hidden;
+      min-height: 0;
+      min-width: 0;
+      gap: var(--panel-gap);
     }
     .main-content.hidden { display: none; }
     
     /* 左侧工具栏 */
     .toolbar {
-      width: 60px;
-      background: var(--vscode-sideBar-background);
-      border-right: 1px solid var(--vscode-sideBar-border);
-      padding: 10px 5px;
+      width: var(--toolbar-width);
+      background: color-mix(in srgb, var(--vscode-editorWidget-background) 90%, transparent);
+      border: 1px solid color-mix(in srgb, var(--vscode-panel-border) 75%, transparent);
+      border-radius: var(--ui-radius-lg);
+      padding: clamp(8px, 1vh, 12px) clamp(4px, 0.5vw, 8px);
       display: flex;
       flex-direction: column;
-      gap: 5px;
+      gap: clamp(4px, 0.6vh, 6px);
       z-index: 10;
+      flex-shrink: 0;
+      overflow: hidden;
+      box-shadow: var(--ui-shadow-card);
     }
     .toolbar-btn {
-      width: 50px;
-      height: 50px;
+      width: calc(var(--toolbar-width) - clamp(8px, 1vw, 16px));
+      height: clamp(42px, 7vh, 52px);
       border: none;
       background: transparent;
       color: var(--vscode-foreground);
       cursor: pointer;
-      border-radius: 5px;
+      border-radius: var(--ui-radius-sm);
       display: flex;
       flex-direction: column;
       align-items: center;
       justify-content: center;
       font-size: 10px;
+      transition: transform 0.15s, background 0.2s, box-shadow 0.2s;
     }
-    .toolbar-btn:hover { background: var(--vscode-toolbar-hoverBackground); }
+    .toolbar-btn:hover {
+      background: color-mix(in srgb, var(--n8n-accent) 18%, var(--vscode-toolbar-hoverBackground) 82%);
+      transform: translateY(-1px);
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.12);
+    }
     .toolbar-btn .icon { font-size: 18px; margin-bottom: 2px; }
     
     /* 画布区域 */
@@ -553,6 +599,11 @@ export class WorkflowEditorProvider implements vscode.CustomEditorProvider<Workf
       position: relative;
       overflow: hidden;
       cursor: default;
+      min-width: 0;
+      min-height: 0;
+      border: 1px solid color-mix(in srgb, var(--vscode-panel-border) 80%, transparent);
+      border-radius: var(--ui-radius-lg);
+      box-shadow: var(--ui-shadow-card);
     }
     .canvas-container.panning { cursor: grab; }
     .canvas-container.panning.active { cursor: grabbing; }
@@ -567,8 +618,14 @@ export class WorkflowEditorProvider implements vscode.CustomEditorProvider<Workf
     .canvas-bg {
       position: absolute;
       top: 0; left: 0; right: 0; bottom: 0;
-      background-image: radial-gradient(circle, var(--vscode-editorRuler-foreground) 1px, transparent 1px);
-      background-size: 20px 20px;
+      background-image:
+        radial-gradient(circle, color-mix(in srgb, var(--vscode-editorRuler-foreground) 42%, transparent) 1px, transparent 1px),
+        linear-gradient(
+          180deg,
+          color-mix(in srgb, var(--vscode-editor-background) 94%, var(--vscode-button-background) 6%) 0%,
+          var(--vscode-editor-background) 100%
+        );
+      background-size: 22px 22px, 100% 100%;
       pointer-events: none;
     }
     
@@ -584,25 +641,27 @@ export class WorkflowEditorProvider implements vscode.CustomEditorProvider<Workf
       position: absolute;
       min-width: 150px;
       background: var(--vscode-editorWidget-background);
-      border: 2px solid var(--vscode-panel-border);
-      border-radius: 8px;
+      border: 1px solid color-mix(in srgb, var(--vscode-panel-border) 80%, transparent);
+      border-radius: var(--ui-radius-md);
       cursor: move;
       user-select: none;
-      transition: box-shadow 0.2s;
+      transition: box-shadow 0.2s, border-color 0.2s, transform 0.15s;
+      box-shadow: var(--ui-shadow-card);
     }
     .node:hover {
       border-color: var(--vscode-focusBorder);
-      box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+      box-shadow: var(--ui-shadow-soft);
+      transform: translateY(-1px);
     }
     .node.selected {
-      border-color: var(--vscode-button-background);
-      box-shadow: 0 0 0 2px var(--vscode-button-background);
+      border-color: var(--n8n-accent);
+      box-shadow: 0 0 0 2px color-mix(in srgb, var(--n8n-accent) 70%, transparent);
     }
     .node.dragging { opacity: 0.8; }
     .node-header {
       padding: 8px 12px;
-      background: var(--vscode-editorGroupHeader-tabsBackground);
-      border-radius: 6px 6px 0 0;
+      background: color-mix(in srgb, var(--vscode-editorGroupHeader-tabsBackground) 82%, var(--vscode-button-background) 18%);
+      border-radius: 8px 8px 0 0;
       font-weight: 600;
       font-size: 13px;
       display: flex;
@@ -621,9 +680,9 @@ export class WorkflowEditorProvider implements vscode.CustomEditorProvider<Workf
     }
     .node-type-start .node-type-icon { background: #4caf50; }
     .node-type-end .node-type-icon { background: #f44336; }
-    .node-type-code .node-type-icon { background: #2196f3; }
-    .node-type-llm .node-type-icon { background: #9c27b0; }
-    .node-type-switch .node-type-icon { background: #ff9800; }
+    .node-type-code .node-type-icon { background: #4b8efc; }
+    .node-type-llm .node-type-icon { background: #a56bff; }
+    .node-type-switch .node-type-icon { background: var(--n8n-accent); }
     .node-type-parallel .node-type-icon { background: #00bcd4; }
     
     /* 节点执行状态 */
@@ -743,17 +802,17 @@ export class WorkflowEditorProvider implements vscode.CustomEditorProvider<Workf
       fill: none;
       stroke: var(--vscode-editor-foreground);
       stroke-width: 2;
-      opacity: 0.5;
+      opacity: 0.42;
       transition: stroke 0.3s, opacity 0.3s, stroke-width 0.3s;
     }
     #edges-svg path.active {
-      stroke: #4caf50;
+      stroke: var(--n8n-accent-soft);
       stroke-width: 3;
       opacity: 1;
     }
     
     #temp-edge {
-      stroke: var(--vscode-button-background);
+      stroke: var(--n8n-accent);
       stroke-width: 2;
       stroke-dasharray: 5, 5;
       opacity: 0.8;
@@ -767,22 +826,45 @@ export class WorkflowEditorProvider implements vscode.CustomEditorProvider<Workf
       display: flex;
       gap: 8px;
       z-index: 100;
+      padding: 6px;
+      border-radius: var(--ui-radius-md);
+      background: color-mix(in srgb, var(--vscode-editorWidget-background) 90%, transparent);
+      border: 1px solid color-mix(in srgb, var(--vscode-sideBar-border) 65%, transparent);
+      backdrop-filter: blur(2px);
+      flex-wrap: wrap;
+      max-width: min(92%, 640px);
     }
     .top-bar button {
       padding: 6px 12px;
       background: var(--vscode-button-background);
       color: var(--vscode-button-foreground);
       border: none;
-      border-radius: 4px;
+      border-radius: 999px;
       cursor: pointer;
       font-size: 12px;
+      transition: transform 0.15s, box-shadow 0.2s, background 0.2s;
     }
-    .top-bar button:hover { background: var(--vscode-button-hoverBackground); }
+    .top-bar button:hover {
+      background: color-mix(in srgb, var(--n8n-accent) 24%, var(--vscode-button-hoverBackground) 76%);
+      transform: translateY(-1px);
+      box-shadow: 0 3px 8px rgba(0, 0, 0, 0.2);
+    }
+    #btn-run {
+      background: linear-gradient(135deg, var(--n8n-accent) 0%, #ff8f6a 100%);
+      color: #fff;
+      font-weight: 600;
+    }
+    #btn-run:hover {
+      background: linear-gradient(135deg, #ff7c52 0%, #ff9d79 100%);
+    }
+    #btn-save {
+      background: color-mix(in srgb, var(--vscode-button-secondaryBackground) 86%, var(--n8n-accent) 14%);
+    }
     .zoom-display {
       padding: 6px 12px;
       background: var(--vscode-editorWidget-background);
       color: var(--vscode-foreground);
-      border-radius: 4px;
+      border-radius: var(--ui-radius-sm);
       font-size: 12px;
       min-width: 60px;
       text-align: center;
@@ -790,17 +872,22 @@ export class WorkflowEditorProvider implements vscode.CustomEditorProvider<Workf
     
     /* 右侧属性面板 */
     .properties-panel {
-      width: 300px;
-      background: var(--vscode-sideBar-background);
-      border-left: 1px solid var(--vscode-sideBar-border);
-      padding: 15px;
+      width: var(--properties-width);
+      background: color-mix(in srgb, var(--vscode-editorWidget-background) 92%, transparent);
+      border: 1px solid color-mix(in srgb, var(--vscode-panel-border) 75%, transparent);
+      border-radius: var(--ui-radius-lg);
+      padding: clamp(10px, 1vw, 16px);
       overflow-y: auto;
       z-index: 10;
+      flex-shrink: 0;
+      min-width: 210px;
+      box-shadow: var(--ui-shadow-card);
     }
     .properties-panel h3 {
       margin-bottom: 15px;
       padding-bottom: 10px;
-      border-bottom: 1px solid var(--vscode-sideBar-border);
+      border-bottom: 1px solid color-mix(in srgb, var(--vscode-sideBar-border) 82%, transparent);
+      letter-spacing: 0.2px;
     }
     .property-group { margin-bottom: 15px; }
     .property-group label {
@@ -812,30 +899,36 @@ export class WorkflowEditorProvider implements vscode.CustomEditorProvider<Workf
     }
     .property-group input, .property-group textarea, .property-group select {
       width: 100%;
-      padding: 6px 8px;
+      padding: 7px 9px;
       background: var(--vscode-input-background);
-      border: 1px solid var(--vscode-input-border);
+      border: 1px solid color-mix(in srgb, var(--vscode-input-border) 80%, var(--n8n-accent) 20%);
       color: var(--vscode-input-foreground);
-      border-radius: 4px;
+      border-radius: var(--ui-radius-sm);
       font-size: 12px;
     }
     .property-group input:focus, .property-group textarea:focus, .property-group select:focus {
       outline: none;
-      border-color: var(--vscode-focusBorder);
+      border-color: var(--n8n-accent);
+      box-shadow: 0 0 0 1px color-mix(in srgb, var(--n8n-accent) 50%, transparent);
     }
     
     .btn-danger {
       width: 100%;
       margin-top: 20px;
-      padding: 8px;
+      padding: 9px;
       background: #d32f2f;
       color: white;
       border: none;
-      border-radius: 4px;
+      border-radius: var(--ui-radius-sm);
       cursor: pointer;
       font-size: 12px;
+      transition: filter 0.2s, transform 0.15s;
     }
-    .btn-danger:hover { background: #b71c1c; }
+    .btn-danger:hover {
+      background: #b71c1c;
+      filter: brightness(1.05);
+      transform: translateY(-1px);
+    }
     
 
     .prop-tabs {
@@ -849,14 +942,15 @@ export class WorkflowEditorProvider implements vscode.CustomEditorProvider<Workf
       background: var(--vscode-editorGroupHeader-tabsBackground);
       border: 1px solid var(--vscode-sideBar-border);
       color: var(--vscode-descriptionForeground);
-      border-radius: 4px;
+      border-radius: var(--ui-radius-sm);
       cursor: pointer;
       font-size: 12px;
+      transition: all 0.2s;
     }
     .prop-tab.active {
       color: var(--vscode-foreground);
-      border-color: var(--vscode-focusBorder);
-      background: var(--vscode-editorWidget-background);
+      border-color: var(--n8n-accent);
+      background: color-mix(in srgb, var(--n8n-accent) 16%, var(--vscode-editorWidget-background) 84%);
     }
     .prop-section { display: none; }
     .prop-section.active { display: block; }
@@ -869,7 +963,7 @@ export class WorkflowEditorProvider implements vscode.CustomEditorProvider<Workf
     .io-block {
       background: var(--vscode-editor-background);
       border: 1px solid var(--vscode-sideBar-border);
-      border-radius: 4px;
+      border-radius: var(--ui-radius-sm);
       padding: 8px;
       font-size: 12px;
       line-height: 1.4;
@@ -896,11 +990,12 @@ export class WorkflowEditorProvider implements vscode.CustomEditorProvider<Workf
       bottom: 10px;
       left: 10px;
       padding: 8px 12px;
-      background: var(--vscode-editorWidget-background);
-      border-radius: 4px;
+      background: color-mix(in srgb, var(--vscode-editorWidget-background) 88%, transparent);
+      border-radius: var(--ui-radius-sm);
       font-size: 11px;
       color: var(--vscode-descriptionForeground);
       z-index: 100;
+      border: 1px solid color-mix(in srgb, var(--vscode-sideBar-border) 60%, transparent);
     }
     
     /* JSON 编辑器 */
@@ -909,14 +1004,17 @@ export class WorkflowEditorProvider implements vscode.CustomEditorProvider<Workf
       display: flex;
       flex-direction: column;
       overflow: hidden;
+      min-width: 0;
+      min-height: 0;
     }
     
     .json-toolbar {
       display: flex;
       gap: 8px;
       padding: 10px;
-      background: var(--vscode-editorGroupHeader-tabsBackground);
-      border-bottom: 1px solid var(--vscode-sideBar-border);
+      background: color-mix(in srgb, var(--vscode-editorWidget-background) 90%, transparent);
+      border-bottom: 1px solid color-mix(in srgb, var(--vscode-sideBar-border) 80%, transparent);
+      flex-wrap: wrap;
     }
     
     .json-toolbar button {
@@ -924,7 +1022,7 @@ export class WorkflowEditorProvider implements vscode.CustomEditorProvider<Workf
       background: var(--vscode-button-background);
       color: var(--vscode-button-foreground);
       border: none;
-      border-radius: 4px;
+      border-radius: 999px;
       cursor: pointer;
       font-size: 12px;
     }
@@ -965,6 +1063,56 @@ export class WorkflowEditorProvider implements vscode.CustomEditorProvider<Workf
       font-size: 11px;
       display: flex;
       justify-content: space-between;
+    }
+
+    @media (max-width: 1200px) {
+      .hint {
+        max-width: 50%;
+      }
+    }
+
+    @media (max-width: 980px) {
+      .toolbar-btn span:not(.icon) {
+        font-size: 9px;
+      }
+      .properties-panel {
+        width: clamp(200px, 28vw, 260px);
+      }
+      .top-bar {
+        gap: 6px;
+      }
+      .top-bar button {
+        padding: 5px 10px;
+      }
+      .view-tab {
+        padding: 6px 10px;
+      }
+      .history-btn {
+        padding: 4px 7px;
+      }
+    }
+
+    @media (max-height: 760px) {
+      .toolbar-btn {
+        height: clamp(36px, 6vh, 44px);
+      }
+      .hint {
+        display: none;
+      }
+      .top-bar {
+        top: 8px;
+        right: 8px;
+      }
+      .properties-panel h3 {
+        margin-bottom: 10px;
+        padding-bottom: 8px;
+      }
+      .property-group {
+        margin-bottom: 10px;
+      }
+      .btn-danger {
+        margin-top: 12px;
+      }
     }
   </style>
 </head>
