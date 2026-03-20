@@ -3,7 +3,6 @@
 src/**
 tests/**
 examples/**
-node_modules/**
 .gitignore
 .yarnrc
 vsc-extension-quickstart.md
@@ -15,3 +14,5 @@ vsc-extension-quickstart.md
 package-lock.json
 *.vsix
 webview-ui/**
+# 包含所有 node_modules 依赖（MCP SDK 需要多个依赖）
+# node_modules/**
