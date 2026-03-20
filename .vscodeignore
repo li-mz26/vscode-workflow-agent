@@ -3,7 +3,6 @@
 src/**
 tests/**
 examples/**
-node_modules/**
 .gitignore
 .yarnrc
 vsc-extension-quickstart.md
@@ -15,3 +14,6 @@ vsc-extension-quickstart.md
 package-lock.json
 *.vsix
 webview-ui/**
+# 只包含需要的 node_modules
+node_modules/**
+!node_modules/@modelcontextprotocol/**
