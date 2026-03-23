@@ -890,6 +890,107 @@ export class WorkflowEditorProvider implements vscode.CustomEditorProvider<Workf
       font-size: 12px;
       color: var(--vscode-descriptionForeground);
     }
+
+    /* 告警输入框样式 */
+    .alert-section {
+      margin-top: 20px;
+      padding-top: 15px;
+      border-top: 1px solid var(--vscode-sideBar-border);
+    }
+    .alert-section h4 {
+      margin-bottom: 10px;
+      font-size: 12px;
+      color: var(--vscode-descriptionForeground);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .alert-section h4 .alert-icon {
+      color: #f44336;
+      font-size: 14px;
+    }
+    .alert-input-container {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .alert-input-wrapper {
+      display: flex;
+      gap: 6px;
+      align-items: stretch;
+    }
+    .alert-input {
+      flex: 1;
+      padding: 8px 10px;
+      background: var(--vscode-input-background);
+      border: 1px solid var(--vscode-input-border);
+      color: var(--vscode-input-foreground);
+      border-radius: 4px;
+      font-size: 12px;
+      min-height: 36px;
+      resize: vertical;
+    }
+    .alert-input:focus {
+      outline: none;
+      border-color: #f44336;
+      box-shadow: 0 0 0 1px rgba(244, 67, 54, 0.3);
+    }
+    .alert-input::placeholder {
+      color: var(--vscode-input-placeholderForeground);
+    }
+    .alert-btn {
+      padding: 8px 12px;
+      background: #f44336;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 12px;
+      white-space: nowrap;
+      transition: background 0.2s;
+    }
+    .alert-btn:hover {
+      background: #d32f2f;
+    }
+    .alert-btn:active {
+      background: #b71c1c;
+    }
+    .alert-list {
+      margin-top: 8px;
+      max-height: 150px;
+      overflow-y: auto;
+    }
+    .alert-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 8px;
+      background: rgba(244, 67, 54, 0.1);
+      border: 1px solid rgba(244, 67, 54, 0.3);
+      border-radius: 4px;
+      margin-bottom: 4px;
+      font-size: 11px;
+    }
+    .alert-item .alert-text {
+      flex: 1;
+      color: var(--vscode-foreground);
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+    .alert-item .alert-remove {
+      color: #f44336;
+      cursor: pointer;
+      font-size: 14px;
+      opacity: 0.7;
+    }
+    .alert-item .alert-remove:hover {
+      opacity: 1;
+    }
+    .alert-empty {
+      font-size: 11px;
+      color: var(--vscode-descriptionForeground);
+      font-style: italic;
+    }
     
     .hint {
       position: absolute;
@@ -1021,6 +1122,19 @@ export class WorkflowEditorProvider implements vscode.CustomEditorProvider<Workf
         <div id="properties-content">
           <p style="color: var(--vscode-descriptionForeground); font-size: 12px;">选择一个节点查看其属性</p>
         </div>
+        <!-- 告警输入框区域 -->
+        <div class="alert-section">
+          <h4><span class="alert-icon">⚠</span> 告警设置</h4>
+          <div class="alert-input-container">
+            <div class="alert-input-wrapper">
+              <textarea class="alert-input" id="alert-input" placeholder="输入告警信息..." rows="2"></textarea>
+              <button class="alert-btn" id="alert-add-btn">添加</button>
+            </div>
+            <div class="alert-list" id="alert-list">
+              <div class="alert-empty">暂无告警</div>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
     
@@ -1135,6 +1249,7 @@ export class WorkflowEditorProvider implements vscode.CustomEditorProvider<Workf
     let executionStatus = {}; // 节点执行状态
     let executedEdges = new Set(); // 已执行的边
     let nodeExecutionData = {}; // 最近一次运行的节点输入输出
+    let alerts = []; // 告警列表
     
     let scale = 1;
     let offset = { x: 0, y: 0 };
@@ -1162,6 +1277,9 @@ export class WorkflowEditorProvider implements vscode.CustomEditorProvider<Workf
     const jsonError = document.getElementById('json-error');
     const jsonLines = document.getElementById('json-lines');
     const jsonSize = document.getElementById('json-size');
+    const alertInput = document.getElementById('alert-input');
+    const alertAddBtn = document.getElementById('alert-add-btn');
+    const alertList = document.getElementById('alert-list');
     
     // ========== 初始化 ==========
     window.addEventListener('message', event => {
@@ -1550,9 +1668,64 @@ export class WorkflowEditorProvider implements vscode.CustomEditorProvider<Workf
     document.getElementById('btn-save').addEventListener('click', () => {
       vscode.postMessage({ type: 'save', workflow });
     });
-    
+
     document.getElementById('btn-run').addEventListener('click', () => {
+      // 在运行前将默认告警信息显示在输入框中
+      if (alertInput) {
+        // 从工作流的开始节点配置中读取默认输入
+        const startNode = workflow.nodes.find(n => n.type === 'start');
+        const startConfig = startNode ? nodeConfigs[startNode.id] : null;
+        const defaultInput = startConfig?.defaultInput || '';
+
+        // 如果有默认输入，填充到输入框
+        if (defaultInput && !alertInput.value.trim()) {
+          alertInput.value = defaultInput;
+        }
+      }
+
       vscode.postMessage({ type: 'run', workflow });
+    });
+
+    function renderAlertList() {
+      if (!alertList) return;
+      if (alerts.length === 0) {
+        alertList.innerHTML = '<div class="alert-empty">暂无告警</div>';
+        return;
+      }
+      alertList.innerHTML = alerts
+        .map((text, index) => \`
+          <div class="alert-item">
+            <span class="alert-text">\${escapeHtml(text)}</span>
+            <span class="alert-remove" data-alert-index="\${index}" title="删除">✕</span>
+          </div>
+        \`)
+        .join('');
+    }
+
+    function addAlert() {
+      if (!alertInput) return;
+      const value = alertInput.value.trim();
+      if (!value) return;
+      alerts.push(value);
+      alertInput.value = '';
+      renderAlertList();
+    }
+
+    alertAddBtn?.addEventListener('click', addAlert);
+    alertInput?.addEventListener('keydown', (event) => {
+      if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') {
+        event.preventDefault();
+        addAlert();
+      }
+    });
+    alertList?.addEventListener('click', (event) => {
+      const target = event.target;
+      if (!(target instanceof HTMLElement)) return;
+      if (!target.classList.contains('alert-remove')) return;
+      const index = Number(target.dataset.alertIndex);
+      if (Number.isNaN(index)) return;
+      alerts.splice(index, 1);
+      renderAlertList();
     });
     
     // ========== 节点操作 ==========
