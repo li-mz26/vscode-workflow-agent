@@ -22,7 +22,8 @@ export interface Position {
 /** 节点元数据 */
 export interface NodeMetadata {
   name: string;
-  description?: string;
+  description?: string;  // 简要描述，建议 50 字以内
+  summary?: string;      // 主要信息，完整的详细描述
   icon?: string;
   color?: string;
 }
@@ -32,6 +33,8 @@ export interface SwitchBranch {
   id: string;
   name: string;
   condition: string;  // 表达式，如 "data.score > 80"
+  description?: string;  // 简要描述，建议 50 字以内
+  summary?: string;      // 主要信息，完整的详细描述
   priority?: number;
 }
 
