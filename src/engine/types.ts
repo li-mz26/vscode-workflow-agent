@@ -68,6 +68,7 @@ export type StartTriggerType = 'manual' | 'api' | 'schedule' | 'webhook';
 /** 开始节点配置 */
 export interface StartNodeConfig {
   triggerType: StartTriggerType;
+  defaultInput?: string | Record<string, any>;  // 默认输入，可以是字符串或对象
   schedule?: {
     cron: string;
     timezone?: string;

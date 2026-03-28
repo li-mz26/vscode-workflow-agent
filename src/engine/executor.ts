@@ -12,7 +12,8 @@ import {
   NodeExecutionResult,
   WorkflowExecutionResult,
   WorkflowExecutionStatus,
-  NodeExecutionStatus
+  NodeExecutionStatus,
+  StartNodeConfig
 } from './types';
 import { spawn } from 'child_process';
 import * as path from 'path';
@@ -359,7 +360,19 @@ export class WorkflowEngine {
       const config = nodeConfigs.get(node.id) || (node.data as NodeConfig) || {};
 
       // 收集输入（从上游节点）
-      const input = this.collectInput(node, context);
+      let input = this.collectInput(node, context);
+
+      // Start 节点支持 defaultInput
+      if (node.type === 'start') {
+        const startConfig = config as StartNodeConfig;
+        if (startConfig.defaultInput !== undefined) {
+          if (typeof startConfig.defaultInput === 'string') {
+            input = { raw_alarm_text: startConfig.defaultInput };
+          } else {
+            input = startConfig.defaultInput;
+          }
+        }
+      }
 
       // 执行
       const output = await executor.execute(config as NodeConfig, input, context);

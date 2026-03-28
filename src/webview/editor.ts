@@ -4,8 +4,67 @@
 
 import * as vscode from 'vscode';
 import * as path from 'path';
-import { Workflow, WorkflowNode, WorkflowEdge, NodeType, NodeConfig } from '../engine/types';
+import * as fs from 'fs';
+import { Workflow, WorkflowNode, WorkflowEdge, NodeType, NodeConfig, WorkflowExecutionResult } from '../engine/types';
 import { WorkflowLoader } from '../engine/loader';
+
+function formatLocalTime(timestamp: number): string {
+  const date = new Date(timestamp);
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  const hours = String(date.getHours()).padStart(2, '0');
+  const minutes = String(date.getMinutes()).padStart(2, '0');
+  const seconds = String(date.getSeconds()).padStart(2, '0');
+  const ms = String(date.getMilliseconds()).padStart(3, '0');
+  return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}.${ms}`;
+}
+
+function generateLogTimestamp(): string {
+  const date = new Date();
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  const hours = String(date.getHours()).padStart(2, '0');
+  const minutes = String(date.getMinutes()).padStart(2, '0');
+  const seconds = String(date.getSeconds()).padStart(2, '0');
+  return `${year}-${month}-${day}_${hours}-${minutes}-${seconds}`;
+}
+
+async function saveExecutionLog(workflowDir: string, result: WorkflowExecutionResult): Promise<void> {
+  try {
+    const logsDir = path.join(workflowDir, 'logs');
+    if (!fs.existsSync(logsDir)) {
+      await fs.promises.mkdir(logsDir, { recursive: true });
+    }
+
+    const logFilePath = path.join(logsDir, `execution_${generateLogTimestamp()}.json`);
+    const logContent = {
+      executionId: result.executionId,
+      workflowId: result.workflowId,
+      status: result.status,
+      startTime: formatLocalTime(result.startTime),
+      endTime: result.endTime ? formatLocalTime(result.endTime) : null,
+      duration: result.duration,
+      error: result.error,
+      nodeResults: result.nodeResults.map(nodeResult => ({
+        nodeId: nodeResult.nodeId,
+        status: nodeResult.status,
+        startTime: formatLocalTime(nodeResult.startTime),
+        endTime: nodeResult.endTime ? formatLocalTime(nodeResult.endTime) : null,
+        duration: nodeResult.duration,
+        input: nodeResult.input,
+        output: nodeResult.output,
+        error: nodeResult.error
+      }))
+    };
+
+    await fs.promises.writeFile(logFilePath, JSON.stringify(logContent, null, 2), 'utf-8');
+    console.log(`Execution log saved: ${logFilePath}`);
+  } catch (error) {
+    console.error('Failed to save execution log:', error);
+  }
+}
 
 /**
  * 生成节点默认配置
@@ -385,6 +444,7 @@ export class WorkflowEditorProvider implements vscode.CustomEditorProvider<Workf
     
     try {
       const result = await engine.execute(document.workflow, document.nodeConfigs);
+      await saveExecutionLog(document.workflowDir, result);
       
       if (result.status === 'success') {
         vscode.window.showInformationMessage('工作流运行成功！');
@@ -836,6 +896,18 @@ export class WorkflowEditorProvider implements vscode.CustomEditorProvider<Workf
       font-size: 12px;
     }
     .btn-danger:hover { background: #b71c1c; }
+    .btn-primary {
+      width: 100%;
+      padding: 8px 12px;
+      background: var(--vscode-button-background);
+      color: var(--vscode-button-foreground);
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 12px;
+      margin-top: 10px;
+    }
+    .btn-primary:hover { background: var(--vscode-button-hoverBackground); }
     
 
     .prop-tabs {
@@ -889,6 +961,13 @@ export class WorkflowEditorProvider implements vscode.CustomEditorProvider<Workf
       margin-bottom: 10px;
       font-size: 12px;
       color: var(--vscode-descriptionForeground);
+    }
+    .branch-item {
+      padding: 10px;
+      margin-bottom: 10px;
+      background: var(--vscode-editor-background);
+      border: 1px solid var(--vscode-sideBar-border);
+      border-radius: 4px;
     }
 
     /* 告警输入框样式 */
@@ -1982,6 +2061,32 @@ export class WorkflowEditorProvider implements vscode.CustomEditorProvider<Workf
             </div>
           \`;
           break;
+        case 'switch':
+          const branches = node.detail?.branches || [];
+          const branchItems = branches.map((branch, index) => \`
+            <div class="branch-item">
+              <div class="property-group">
+                <label>分支 \${index + 1} ID</label>
+                <input type="text" id="branch-id-\${index}" value="\${branch.id || ''}">
+              </div>
+              <div class="property-group">
+                <label>分支名称</label>
+                <input type="text" id="branch-name-\${index}" value="\${branch.name || ''}">
+              </div>
+              <div class="property-group">
+                <label>条件表达式</label>
+                <input type="text" id="branch-condition-\${index}" value="\${branch.condition || ''}">
+              </div>
+            </div>
+          \`).join('');
+          configHtml = \`
+            <div class="config-section">
+              <h4>分支配置</h4>
+              <div id="branches-container">\${branchItems}</div>
+              <button class="btn-primary" id="btn-add-branch">➕ 添加分支</button>
+            </div>
+          \`;
+          break;
       }
 
       const configRef = node.configRef || '';
@@ -2069,6 +2174,45 @@ export class WorkflowEditorProvider implements vscode.CustomEditorProvider<Workf
         openConfigFileBtn.addEventListener('click', () => {
           vscode.postMessage({ type: 'openConfigFile', nodeId: node.id });
         });
+      }
+
+      if (node.type === 'switch' && node.detail?.branches) {
+        node.detail.branches.forEach((branch, index) => {
+          document.getElementById(\`branch-id-\${index}\`)?.addEventListener('input', e => {
+            branch.id = e.target.value;
+            renderNodes();
+            updateJsonEditor();
+          });
+          document.getElementById(\`branch-name-\${index}\`)?.addEventListener('input', e => {
+            branch.name = e.target.value;
+            renderNodes();
+            updateJsonEditor();
+          });
+          document.getElementById(\`branch-condition-\${index}\`)?.addEventListener('input', e => {
+            branch.condition = e.target.value;
+            renderNodes();
+            updateJsonEditor();
+          });
+        });
+
+        const addBranchBtn = document.getElementById('btn-add-branch');
+        if (addBranchBtn) {
+          addBranchBtn.addEventListener('click', () => {
+            if (!node.detail) node.detail = { branches: [] };
+            if (!node.detail.branches) node.detail.branches = [];
+            const newBranchId = 'branch_' + Date.now();
+            const branchCount = node.detail.branches.length;
+            node.detail.branches.push({
+              id: newBranchId,
+              name: '分支 ' + (branchCount + 1),
+              condition: branchCount === 0 ? 'true' : 'false'
+            });
+            pushHistory('添加分支');
+            showProperties(node);
+            renderNodes();
+            updateJsonEditor();
+          });
+        }
       }
       
       document.getElementById('btn-delete-node').addEventListener('click', () => deleteNode(node.id));
