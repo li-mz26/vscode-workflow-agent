@@ -1819,7 +1819,7 @@ export class WorkflowEditorProvider implements vscode.CustomEditorProvider<Workf
         id,
         type,
         position: { x: canvasCenter.x - 75, y: canvasCenter.y - 40 },
-        metadata: { name: getNodeName(type), description: '' },
+        metadata: { name: getNodeName(type), description: '', summary: '' },
         data: {}
       };
       
@@ -2122,6 +2122,10 @@ export class WorkflowEditorProvider implements vscode.CustomEditorProvider<Workf
             <textarea id="prop-desc" rows="2">\${node.metadata.description || ''}</textarea>
           </div>
           <div class="property-group">
+            <label>详细信息</label>
+            <textarea id="prop-summary" rows="4">\${node.metadata.summary || ''}</textarea>
+          </div>
+          <div class="property-group">
             <label>配置文件</label>
             \${configRef
               ? \`<a class="config-file-link" id="open-config-file" title="打开 \${configRef}">\${configRef}</a>\`
@@ -2167,6 +2171,15 @@ export class WorkflowEditorProvider implements vscode.CustomEditorProvider<Workf
       
       document.getElementById('prop-desc').addEventListener('change', e => {
         pushHistory('修改节点描述');
+      });
+
+      document.getElementById('prop-summary').addEventListener('input', e => {
+        node.metadata.summary = e.target.value;
+        updateJsonEditor();
+      });
+
+      document.getElementById('prop-summary').addEventListener('change', e => {
+        pushHistory('修改节点详细信息');
       });
 
       const openConfigFileBtn = document.getElementById('open-config-file');
