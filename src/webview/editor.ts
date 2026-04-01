@@ -1758,7 +1758,12 @@ export class WorkflowEditorProvider implements vscode.CustomEditorProvider<Workf
 
         // 如果有默认输入，填充到输入框
         if (defaultInput && !alertInput.value.trim()) {
-          alertInput.value = defaultInput;
+          // 如果 defaultInput 是对象，转换为 JSON 字符串
+          if (typeof defaultInput === 'object') {
+            alertInput.value = JSON.stringify(defaultInput, null, 2);
+          } else {
+            alertInput.value = defaultInput;
+          }
         }
       }
 
